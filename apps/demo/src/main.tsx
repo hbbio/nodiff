@@ -7,6 +7,7 @@ import {
   createRouter,
   For,
   mount,
+  Show,
   text,
   view,
   zodSubmit,
@@ -351,14 +352,9 @@ function AuthPage() {
         </p>
       </header>
 
-      {view(
-        auth.store,
-        (state) => state,
-        (state) => {
-          if (state.token) return <AuthenticatedPanel />;
-          return <LoginPanel />;
-        },
-      )}
+      <Show store={auth.store} when={(state) => state.token} fallback={() => <LoginPanel />}>
+        {() => <AuthenticatedPanel />}
+      </Show>
     </section>
   );
 }

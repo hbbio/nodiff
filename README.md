@@ -114,7 +114,7 @@ You can read the code for those pieces in a few files.
 | TSX runtime    | `jsx`, `jsxs`, `jsxDEV`, `Fragment`, intrinsic element typing                  |
 | DOM            | `mount`, `append`, direct node creation, events, refs, actions                 |
 | Lifecycle      | cleanup on unmount and region redraw                                           |
-| State bindings | `text`, `view`, `when`, `list`, `For`, `effect`, `bind.*`                      |
+| State bindings | `text`, `view`, `when`, `Show`, `list`, `For`, `effect`, `bind.*`              |
 | Stores         | works with `zustand/vanilla` and any compatible store shape                    |
 | API client     | `fetch`, query params, JSON body handling, zod parsing, auth headers, 401 hook |
 | Cache          | localStorage envelopes with TTL, tags, stale reads, schema validation          |
@@ -574,6 +574,7 @@ Events are inferred from `onX` prop names. `onClick` maps to `click`, `onInput` 
 text(store, selector, format?, equality?);
 view(store, selector, render, options?);
 when(store, predicate, yes, no?);
+Show({ store, when, children, fallback?, equality? });
 list(store, selector, render, options?);
 For({ store, each, by, children, fallback?, equality? });
 effect(store, selector, run, equality?);

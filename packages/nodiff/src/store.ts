@@ -123,6 +123,43 @@ export function when<TState>(
   return view(store, predicate, (enabled, state) => (enabled ? yes(state) : (no?.(state) ?? null)));
 }
 
+export type ShowProps<TState, TValue> = {
+  store: ReadableStore<TState>;
+  when: Selector<TState, TValue>;
+  children: Child | ((value: NonNullable<TValue>, state: TState) => Child);
+  fallback?: Child | ((state: TState, value: TValue) => Child);
+  equality?: Equality<TValue>;
+};
+
+function renderShowChild<TState, TValue>(
+  child: ShowProps<TState, TValue>["children"],
+  value: NonNullable<TValue>,
+  state: TState,
+): Child {
+  return typeof child === "function" ? child(value, state) : child;
+}
+
+function renderShowFallback<TState, TValue>(
+  fallback: ShowProps<TState, TValue>["fallback"],
+  state: TState,
+  value: TValue,
+): Child {
+  if (fallback === undefined) return null;
+  return typeof fallback === "function" ? fallback(state, value) : fallback;
+}
+
+export function Show<TState, TValue>(props: ShowProps<TState, TValue>): DocumentFragment {
+  return view(
+    props.store,
+    props.when,
+    (value, state) =>
+      value
+        ? renderShowChild(props.children, value as NonNullable<TValue>, state)
+        : renderShowFallback(props.fallback, state, value),
+    props.equality ? { equality: props.equality } : {},
+  );
+}
+
 export function list<TState, TItem>(
   store: ReadableStore<TState>,
   selector: Selector<TState, readonly TItem[]>,
