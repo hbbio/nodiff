@@ -1,0 +1,8 @@
+node_modules
+bun.lock
+.DS_Store
+dist
+.vite
+.env
+.env.*
+package-lock.json

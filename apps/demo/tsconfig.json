@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@mini-ria/core",
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@mini-ria/core": ["../../packages/ria/src/index.ts"],
+      "@mini-ria/core/jsx-runtime": ["../../packages/ria/src/jsx-runtime.ts"],
+      "@mini-ria/core/jsx-dev-runtime": ["../../packages/ria/src/jsx-dev-runtime.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
