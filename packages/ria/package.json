@@ -21,14 +21,14 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsgo -p tsconfig.build.json",
+    "typecheck": "tsgo -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "zod": "catalog:",
     "zustand": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:"
+    "@typescript/native-preview": "catalog:"
   }
 }

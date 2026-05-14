@@ -163,19 +163,19 @@ export function createApi(options: ApiClientOptions = {}) {
   return {
     request,
     get<T = unknown>(path: string, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
-      return request<T>(path, { ...(options ?? {}), method: "GET" });
+      return request<T>(path, { ...options, method: "GET" });
     },
     post<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
-      return request<T>(path, { ...(options ?? {}), method: "POST", body });
+      return request<T>(path, { ...options, method: "POST", body });
     },
     put<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
-      return request<T>(path, { ...(options ?? {}), method: "PUT", body });
+      return request<T>(path, { ...options, method: "PUT", body });
     },
     patch<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
-      return request<T>(path, { ...(options ?? {}), method: "PATCH", body });
+      return request<T>(path, { ...options, method: "PATCH", body });
     },
     delete<T = unknown>(path: string, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
-      return request<T>(path, { ...(options ?? {}), method: "DELETE" });
+      return request<T>(path, { ...options, method: "DELETE" });
     },
     cache
   };

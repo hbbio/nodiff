@@ -5,7 +5,6 @@ import {
   createLocalCache,
   createResource,
   createRouter,
-  list,
   mount,
   text,
   view,
@@ -437,7 +436,7 @@ const router = createRouter(
 );
 
 function App() {
-  const Link = router.Link;
+  const Link = (props: Parameters<typeof router.Link>[0]) => router.Link(props);
 
   return (
     <div class="app-shell">

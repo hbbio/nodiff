@@ -116,6 +116,21 @@ function classValue(value: ElementProps["class"]): string | undefined {
   return String(value);
 }
 
+function domString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || typeof value === "symbol") {
+    return String(value);
+  }
+  if (value instanceof Date) return value.toISOString();
+
+  try {
+    return JSON.stringify(value) ?? Object.prototype.toString.call(value);
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
+}
+
 function setStyle(element: Element, value: StyleValue): void {
   if (typeof value === "string") {
     (element as HTMLElement).style.cssText = value;
@@ -219,12 +234,12 @@ function applyProp(element: Element, name: string, value: unknown): void {
   }
 
   if (name === "innerHTML") {
-    element.innerHTML = String(value);
+    element.innerHTML = domString(value);
     return;
   }
 
   if (name === "textContent") {
-    element.textContent = value === null || value === undefined ? "" : String(value);
+    element.textContent = domString(value);
     return;
   }
 
@@ -245,7 +260,7 @@ function applyProp(element: Element, name: string, value: unknown): void {
   }
 
   if (name.startsWith("aria-") || name.startsWith("data-")) {
-    element.setAttribute(name, String(value));
+    element.setAttribute(name, domString(value));
     return;
   }
 
@@ -260,12 +275,12 @@ function applyProp(element: Element, name: string, value: unknown): void {
       target[name] = value;
       return;
     } catch {
-      element.setAttribute(name, String(value));
+      element.setAttribute(name, domString(value));
       return;
     }
   }
 
-  element.setAttribute(name, String(value));
+  element.setAttribute(name, domString(value));
 }
 
 export function toNodes(value: Child): Node[] {
@@ -292,7 +307,7 @@ export function append(parent: Node, value: Child): void {
 
 export function jsx(type: string | Component<unknown>, props: ElementProps | null): Child {
   if (typeof type === "function") {
-    return type({ ...(props ?? {}) });
+    return type({ ...props });
   }
 
   const element = svgTags.has(type)
@@ -319,7 +334,7 @@ export function Fragment(props: { children?: Child }): DocumentFragment {
 
 export function mount(host: Element | string, node: Child | Component, props?: Record<string, unknown>): () => void {
   const element = typeof host === "string" ? document.querySelector(host) : host;
-  if (!element) throw new Error(`Mount target not found: ${String(host)}`);
+  if (!element) throw new Error(`Mount target not found: ${typeof host === "string" ? host : host.tagName.toLowerCase()}`);
 
   const rendered = typeof node === "function" ? (node as Component)(props ?? {}) : node;
   replaceChildrenClean(element, toNodes(rendered));

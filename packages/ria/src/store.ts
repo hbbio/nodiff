@@ -145,7 +145,23 @@ function setAttributeValue(element: Element, name: string, value: unknown): void
     element.setAttribute(name, "");
     return;
   }
-  element.setAttribute(name, String(value));
+  if (typeof value === "string") {
+    element.setAttribute(name, value);
+    return;
+  }
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "symbol") {
+    element.setAttribute(name, String(value));
+    return;
+  }
+  if (value instanceof Date) {
+    element.setAttribute(name, value.toISOString());
+    return;
+  }
+  try {
+    element.setAttribute(name, JSON.stringify(value) ?? Object.prototype.toString.call(value));
+  } catch {
+    element.setAttribute(name, Object.prototype.toString.call(value));
+  }
 }
 
 export const bind = {

@@ -87,9 +87,9 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
     authHeaders,
     isExpired,
     isAuthenticated,
-    setToken: store.getState().setToken,
-    setUser: store.getState().setUser,
-    logout: store.getState().clear
+    setToken: (token: TToken, user?: TUser | null) => store.getState().setToken(token, user),
+    setUser: (user: TUser | null) => store.getState().setUser(user),
+    logout: () => store.getState().clear()
   };
 }
 

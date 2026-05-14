@@ -19,8 +19,22 @@ bun run build
 
 ## Typecheck
 
+Uses TypeScript 7 native preview through `tsgo`.
+
 ```sh
 bun run typecheck
+```
+
+## Lint
+
+```sh
+bun run lint
+```
+
+## Check
+
+```sh
+bun run check
 ```
 
 ## What is included

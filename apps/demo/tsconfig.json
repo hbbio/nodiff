@@ -5,7 +5,6 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@mini-ria/core",
     "types": ["vite/client"],
-    "baseUrl": ".",
     "paths": {
       "@mini-ria/core": ["../../packages/ria/src/index.ts"],
       "@mini-ria/core/jsx-runtime": ["../../packages/ria/src/jsx-runtime.ts"],
