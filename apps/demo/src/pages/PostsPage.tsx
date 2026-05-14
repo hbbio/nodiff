@@ -1,4 +1,4 @@
-import { bind, For, ResourceView, view } from "@nodiffjs/core";
+import { bind, For, ResourceView, safeErrorMessage, view } from "@nodiffjs/core";
 import { Badge, PageHeader, SectionTitle } from "../components";
 import {
   apiCache,
@@ -223,9 +223,7 @@ export function PostsPage() {
             Loading zod-checked posts...
           </p>
         )}
-        error={(error) => (
-          <pre class="mockup-code border border-error/30 text-error">{error.message}</pre>
-        )}
+        error={(error) => <p class="alert alert-error">{safeErrorMessage(error)}</p>}
         empty={() => <p class="alert">No posts loaded.</p>}
       >
         {() => (

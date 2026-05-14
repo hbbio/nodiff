@@ -1,13 +1,18 @@
 import {
   configureSecurityPolicy,
+  cookieSessionRequest,
   createApi,
   createAuth,
   createLocalCache,
   createResource,
+  readCsrfToken,
+  safeErrorMessage,
   type SecurityViolation,
 } from "@nodiffjs/core";
 import { createStore } from "zustand/vanilla";
 import { z } from "zod";
+
+const demoCsrfToken = crypto.randomUUID();
 
 function reportSecurityViolation(violation: SecurityViolation): void {
   console.warn(`[nodiff security] ${violation.type}: ${violation.context ?? violation.message}`);
@@ -16,12 +21,13 @@ function reportSecurityViolation(violation: SecurityViolation): void {
 export const securityPolicy = configureSecurityPolicy({
   mode: "strict",
   allowedOrigins: ["self", "https://jsonplaceholder.typicode.com"],
-  allowedUrlSchemes: ["https:"],
+  allowedUrlSchemes: ["http:", "https:"],
   enforceHttps: true,
   cache: {
     requireSchema: true,
     maxTtl: 5 * 60 * 1000,
   },
+  csrf: "double-submit-cookie",
   onViolation: reportSecurityViolation,
 });
 
@@ -111,13 +117,28 @@ applyTheme(preferences.getState().theme);
 
 export const auth = createAuth<{ email: string; name: string }>();
 
-export const api = createApi({
+export function readDemoCsrfToken(): string | null {
+  return readCsrfToken({ token: demoCsrfToken });
+}
+
+export const publicApi = createApi({
   baseUrl: "https://jsonplaceholder.typicode.com",
   cache: apiCache,
   security: securityPolicy,
+});
+
+export const sessionApi = createApi({
+  baseUrl: "/api",
+  security: securityPolicy,
   getAuthHeaders: auth.authHeaders,
+  csrf: {
+    getToken: readDemoCsrfToken,
+    required: "state-changing",
+  },
   onUnauthorized: () => auth.logout(),
 });
+
+export const demoCookieSessionRequest = cookieSessionRequest();
 
 export const PostSchema = z.object({
   userId: z.number(),
@@ -131,7 +152,8 @@ export type Post = z.infer<typeof PostSchema>;
 export const posts = createResource<Post[]>({
   immediate: true,
   load: (_args, { signal }) =>
-    api.get("/posts", {
+    publicApi.get("/posts", {
+      auth: false,
       signal,
       schema: PostsSchema,
       cache: {
@@ -180,7 +202,7 @@ export function readPostsVm(): PostsVm {
     loading: resource.loading,
     stale: resource.stale,
     updatedAt: resource.updatedAt,
-    error: resource.error?.message ?? null,
+    error: resource.error ? safeErrorMessage(resource.error) : null,
     total: all.length,
     filtered: filtered.length,
     search,

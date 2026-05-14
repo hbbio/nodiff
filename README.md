@@ -190,18 +190,29 @@ The demo app opts into strict mode with one policy:
 export const securityPolicy = configureSecurityPolicy({
   mode: "strict",
   allowedOrigins: ["self", "https://jsonplaceholder.typicode.com"],
-  allowedUrlSchemes: ["https:"],
+  allowedUrlSchemes: ["http:", "https:"],
   enforceHttps: true,
   cache: { requireSchema: true, maxTtl: 5 * 60 * 1000 },
+  csrf: "double-submit-cookie",
 });
 
-export const api = createApi({
+export const publicApi = createApi({
   baseUrl: "https://jsonplaceholder.typicode.com",
   security: securityPolicy,
 });
+
+export const sessionApi = createApi({
+  baseUrl: "/api",
+  security: securityPolicy,
+  getAuthHeaders: auth.authHeaders,
+  csrf: { getToken: readCsrfToken, required: "state-changing" },
+});
 ```
 
-For server-rendered shells or deployments that can set headers, start from:
+The demo keeps public JSONPlaceholder reads on `publicApi`, without auth headers, and reserves
+`sessionApi` for first-party authenticated requests. `apps/demo/public/_headers` applies the
+matching CSP and security headers for static deployments. For server-rendered shells or deployments
+that generate headers differently, start from:
 
 ```ts
 const headers = securityHeaders({

@@ -1,6 +1,12 @@
 import { bind, Show, text, zodSubmit } from "@nodiffjs/core";
 import { Badge, PageHeader, SectionTitle } from "../components";
-import { auth, fakeLogin, LoginSchema } from "../state";
+import {
+  auth,
+  demoCookieSessionRequest,
+  fakeLogin,
+  LoginSchema,
+  readDemoCsrfToken,
+} from "../state";
 
 function AuthOverview() {
   return (
@@ -28,7 +34,7 @@ function AuthOverview() {
         <div class="stat-value text-3xl">
           {text(auth.store, (state) => state.token?.tokenType ?? "Bearer")}
         </div>
-        <div class="stat-desc">The API client reads headers from this controller.</div>
+        <div class="stat-desc">First-party requests read headers from this controller.</div>
       </div>
     </section>
   );
@@ -36,7 +42,14 @@ function AuthOverview() {
 
 function LoginPanel() {
   return (
-    <form use={zodSubmit(LoginSchema, fakeLogin)}>
+    <form
+      use={zodSubmit(LoginSchema, fakeLogin, {
+        csrf: {
+          getToken: readDemoCsrfToken,
+          required: true,
+        },
+      })}
+    >
       <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
         <legend class="fieldset-legend">Login</legend>
         <label class="label">Email</label>
@@ -82,7 +95,14 @@ function AuthenticatedPanel() {
           </button>
         </div>
         <pre class="mockup-code border border-base-300 p-4 text-sm">
-          {JSON.stringify(auth.authHeaders(), null, 2)}
+          {JSON.stringify(
+            {
+              headers: auth.authHeaders(),
+              cookieSession: demoCookieSessionRequest,
+            },
+            null,
+            2,
+          )}
         </pre>
       </div>
     </section>
@@ -93,8 +113,8 @@ export function AuthPage() {
   return (
     <section class="grid gap-5">
       <PageHeader title="Bearer headers without ceremony.">
-        A tiny controller keeps a token in memory, exposes auth headers for the API client, and lets
-        the app keep ownership of login and refresh policy.
+        A tiny controller keeps a token in memory, exposes auth headers for first-party requests,
+        and lets the app keep ownership of login and refresh policy.
       </PageHeader>
 
       <AuthOverview />
