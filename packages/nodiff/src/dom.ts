@@ -619,6 +619,59 @@ function setAria(
   }
 }
 
+export function setDomAttribute(element: Element, name: string, value: unknown): void {
+  if (value === null || value === undefined || value === false) {
+    element.removeAttribute(name);
+    return;
+  }
+  if (value === true) {
+    element.setAttribute(name, "");
+    return;
+  }
+
+  const next = domString(value);
+  validateAttributeValue(element, name, next);
+  element.setAttribute(name, next);
+}
+
+function isSvgElement(element: Element): boolean {
+  return typeof SVGElement !== "undefined" && element instanceof SVGElement;
+}
+
+export function clearDomProperty(element: Element, name: string): void {
+  const target = element as unknown as Record<string, unknown>;
+  if (name in target && !isSvgElement(element)) {
+    const current = target[name];
+    target[name] = typeof current === "boolean" ? false : typeof current === "number" ? 0 : "";
+  }
+  element.removeAttribute(name === "className" ? "class" : name);
+}
+
+export function setDomProperty(element: Element, name: string, value: unknown): void {
+  if (name.toLowerCase().startsWith("on")) {
+    validateAttributeValue(element, name, "");
+  }
+
+  if (value === null || value === undefined || value === false) {
+    clearDomProperty(element, name);
+    return;
+  }
+
+  const target = element as unknown as Record<string, unknown>;
+  if (name in target && !isSvgElement(element)) {
+    if (typeof value === "string") validateAttributeValue(element, name, value);
+    try {
+      target[name] = value;
+      return;
+    } catch {
+      setDomAttribute(element, name, value);
+      return;
+    }
+  }
+
+  setDomAttribute(element, name, value);
+}
+
 function applyRef<T extends Node>(node: T, ref: Ref<T>): void {
   if (typeof ref === "function") {
     ref(node);
@@ -728,23 +781,7 @@ function applyProp(element: Element, name: string, value: unknown): void {
     return;
   }
 
-  const target = element as unknown as Record<string, unknown>;
-  if (name in target && !(element instanceof SVGElement)) {
-    try {
-      if (typeof value === "string") validateAttributeValue(element, name, value);
-      target[name] = value;
-      return;
-    } catch {
-      const next = domString(value);
-      validateAttributeValue(element, name, next);
-      element.setAttribute(name, next);
-      return;
-    }
-  }
-
-  const next = domString(value);
-  validateAttributeValue(element, name, next);
-  element.setAttribute(name, next);
+  setDomProperty(element, name, value);
 }
 
 export function toNodes(value: Child): Node[] {
