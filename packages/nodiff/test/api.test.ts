@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { ApiError, createApi } from "../src/api";
 import { createLocalCache } from "../src/cache";
-import { configureSecurityPolicy } from "../src/security";
+import { configureSecurityPolicy, SecurityViolationError } from "../src/security";
 import { installDom } from "./test-dom";
 
 type FetchCall = {
@@ -256,6 +256,91 @@ describe("createApi", () => {
     await api.patch("/profile", { name: "Ada" });
 
     expect(new Headers(calls[0]?.init?.headers).get("x-csrf-token")).toBe("cookie-token");
+  });
+
+  test("requires a base URL for strict API clients", () => {
+    expect(() => createApi({ security: { mode: "strict" } })).toThrow(SecurityViolationError);
+    expect(() => createApi({ baseUrl: "/api", security: { mode: "strict" } })).not.toThrow();
+  });
+
+  test("requires explicit external opt-in for strict absolute URLs", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      security: {
+        mode: "strict",
+        allowedOrigins: ["self"],
+      },
+    });
+
+    await expect(api.get("https://other.example.test/public")).rejects.toThrow("external: true");
+    await expect(api.get("https://other.example.test/public", { external: true })).resolves.toEqual(
+      {
+        ok: true,
+      },
+    );
+    expect(calls[0]?.url).toBe("https://other.example.test/public");
+  });
+
+  test("enforces HTTPS when requested by policy", async () => {
+    const api = createApi({
+      baseUrl: "http://api.example.test",
+      security: {
+        mode: "strict",
+        allowedOrigins: ["http://api.example.test"],
+        enforceHttps: true,
+      },
+    });
+
+    await expect(api.get("/users")).rejects.toThrow("insecure HTTP");
+  });
+
+  test("requires schemas and bounded TTLs for strict cached requests", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      security: {
+        mode: "strict",
+        cache: { maxTtl: 1_000 },
+      },
+    });
+
+    await expect(api.get("/settings", { cache: { ttl: 500 } })).rejects.toThrow(
+      "require a response schema",
+    );
+    await expect(
+      api.get("/settings", {
+        schema: z.object({ ok: z.boolean() }),
+        cache: { ttl: 5_000 },
+      }),
+    ).rejects.toThrow("maxTtl");
+    await expect(
+      api.get("/settings", {
+        schema: z.object({ ok: z.boolean() }),
+        cache: { ttl: 500 },
+      }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  test("aborts requests that exceed a configured timeout", async () => {
+    globalThis.fetch = async (_url, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal?.reason ?? new DOMException("Aborted", "AbortError"));
+        });
+      });
+
+    const api = createApi({ baseUrl: "/api", timeout: 1 });
+
+    await expect(api.get("/slow")).rejects.toThrow("timed out");
   });
 
   test("checks required auth before reading GET cache entries", async () => {

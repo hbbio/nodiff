@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { createLocalCache, type LocalCache, type CacheWriteOptions } from "./cache";
 import { csrfHeaderName, defaultCookieCsrf, readCsrfToken, type CsrfRequestOptions } from "./csrf";
-import { getSecurityPolicy } from "./security";
+import { resolveSecurityPolicy, type SecurityPolicy, type SecurityPolicyOptions } from "./security";
 
 export type ApiSchema<T> = z.ZodType<T>;
 
@@ -22,6 +22,8 @@ export type ApiRequestOptions<T> = {
   cache?: ApiCacheOptions | false;
   auth?: false | "optional" | "required";
   csrf?: boolean | CsrfRequestOptions;
+  external?: boolean;
+  timeout?: number;
   credentials?: RequestCredentials;
 };
 
@@ -29,9 +31,11 @@ export type ApiClientOptions = {
   baseUrl?: string;
   headers?: HeadersInit;
   cache?: LocalCache;
+  security?: SecurityPolicy | SecurityPolicyOptions;
   getToken?: () => string | null | undefined;
   getAuthHeaders?: () => HeadersInit | null | undefined;
   csrf?: CsrfRequestOptions;
+  timeout?: number;
   refreshAuth?: () => Promise<void>;
   onUnauthorized?: (error: ApiError) => void;
 };
@@ -110,6 +114,34 @@ function isStateChanging(method: string): boolean {
   return method !== "GET";
 }
 
+function isLocalhost(url: URL): boolean {
+  return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+}
+
+function timeoutSignal(
+  signal: AbortSignal | undefined,
+  timeout: number | undefined,
+): { signal: AbortSignal | undefined; cleanup: () => void } {
+  if (timeout === undefined) return { signal, cleanup: () => undefined };
+
+  const controller = new AbortController();
+  const abortFromSignal = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromSignal();
+  else signal?.addEventListener("abort", abortFromSignal, { once: true });
+
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException("Request timed out.", "TimeoutError"));
+  }, timeout);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abortFromSignal);
+    },
+  };
+}
+
 async function readPayload(response: Response): Promise<unknown> {
   if (response.status === 204) return undefined;
   const contentType = response.headers.get("content-type") ?? "";
@@ -119,7 +151,39 @@ async function readPayload(response: Response): Promise<unknown> {
 
 export function createApi(options: ApiClientOptions = {}) {
   const cache = options.cache ?? createLocalCache("nodiff:http:");
+  const security = resolveSecurityPolicy(options.security);
+  if (security.isStrict() && !options.baseUrl) {
+    throw security.report({
+      type: "unsafe-config",
+      message: "Strict API clients require a baseUrl.",
+    });
+  }
   const managedAuthOrigin = authOrigin(options.baseUrl);
+
+  function assertRequestUrl(url: URL, path: string, request: ApiRequestOptions<unknown>): void {
+    security.assertSafeUrl(url, "api.request");
+
+    if (security.enforceHttps && url.protocol === "http:" && !isLocalhost(url)) {
+      throw security.report({
+        type: "blocked-origin",
+        message: `Blocked insecure HTTP request: ${url.origin}`,
+        value: url.toString(),
+      });
+    }
+
+    if (!security.isStrict()) return;
+
+    const absolute = /^https?:\/\//i.test(path);
+    if (absolute && !request.external && url.origin !== managedAuthOrigin) {
+      throw security.report({
+        type: "blocked-origin",
+        message: "Absolute API request URLs require external: true in strict mode.",
+        value: url.toString(),
+      });
+    }
+
+    if (!request.external) security.assertAllowedOrigin(url, "api.request");
+  }
 
   function buildHeaders(url: URL, request: ApiRequestOptions<unknown>): Headers {
     const method = request.method ?? (request.body === undefined ? "GET" : "POST");
@@ -138,8 +202,7 @@ export function createApi(options: ApiClientOptions = {}) {
       }
     }
 
-    const policyRequiresCsrf =
-      getSecurityPolicy().csrf === "double-submit-cookie" && isStateChanging(method);
+    const policyRequiresCsrf = security.csrf === "double-submit-cookie" && isStateChanging(method);
     const clientCsrf =
       options.csrf || policyRequiresCsrf ? defaultCookieCsrf(options.csrf) : undefined;
     const requestCsrf =
@@ -196,7 +259,6 @@ export function createApi(options: ApiClientOptions = {}) {
       method: request.method ?? (body === undefined ? "GET" : "POST"),
       headers,
     };
-    if (request.signal) init.signal = request.signal;
     if (request.credentials) init.credentials = request.credentials;
 
     if (body !== undefined) {
@@ -208,9 +270,19 @@ export function createApi(options: ApiClientOptions = {}) {
       }
     }
 
+    const timeout = request.timeout ?? options.timeout;
+    const timed = timeoutSignal(request.signal, timeout);
+    if (timed.signal) init.signal = timed.signal;
+
     const href = url.toString();
-    const response = await fetch(href, init);
-    const payload = await readPayload(response);
+    let response: Response;
+    let payload: unknown;
+    try {
+      response = await fetch(href, init);
+      payload = await readPayload(response);
+    } finally {
+      timed.cleanup();
+    }
 
     if (response.status === 401 && retry && options.refreshAuth) {
       await options.refreshAuth();
@@ -232,10 +304,28 @@ export function createApi(options: ApiClientOptions = {}) {
   ): Promise<T> {
     const method = requestOptions.method ?? (requestOptions.body === undefined ? "GET" : "POST");
     const url = resolveUrl(options.baseUrl, path, requestOptions.query);
+    assertRequestUrl(url, path, requestOptions);
     const headers = buildHeaders(url, requestOptions);
     assertRequiredAuth(requestOptions, headers);
     const cacheOptions = requestOptions.cache;
     const canCache = method === "GET" && cacheOptions !== false && cacheOptions !== undefined;
+    if (canCache && security.isStrict() && !requestOptions.schema) {
+      throw security.report({
+        type: "blocked-cache",
+        message: "Strict cached API requests require a response schema.",
+      });
+    }
+    if (
+      canCache &&
+      cacheOptions.ttl !== undefined &&
+      security.cache.maxTtl !== undefined &&
+      cacheOptions.ttl > security.cache.maxTtl
+    ) {
+      throw security.report({
+        type: "blocked-cache",
+        message: `Cache TTL exceeds policy maxTtl: ${cacheOptions.ttl}`,
+      });
+    }
     const cacheKey = canCache ? cacheKeyFor(url, method, cacheOptions, headers) : "";
 
     if (canCache) {
