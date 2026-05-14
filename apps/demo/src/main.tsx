@@ -5,6 +5,7 @@ import {
   createLocalCache,
   createResource,
   createRouter,
+  For,
   mount,
   text,
   view,
@@ -296,27 +297,27 @@ function PostsPage() {
         )}
       </section>
 
-      {view(
-        postsVm,
-        (state) => state,
-        (state) => {
-          if (state.loading && state.total === 0) return <p class="panel">Loading posts...</p>;
-          if (state.error && state.total === 0) return <pre class="panel error">{state.error}</pre>;
-          if (state.visible.length === 0) return <p class="panel">No posts match this filter.</p>;
-
-          return (
-            <div class="post-list">
-              {state.visible.map((post) => (
-                <article class="panel post-card" data-id={post.id}>
-                  <span>#{post.id}</span>
-                  <h2>{post.title}</h2>
-                  <p>{post.body}</p>
-                </article>
-              ))}
-            </div>
-          );
-        },
-      )}
+      <div class="post-list">
+        <For
+          store={postsVm}
+          each={(state) => state.visible}
+          by={(post) => post.id}
+          fallback={(state) => {
+            if (state.loading && state.total === 0) return <p class="panel">Loading posts...</p>;
+            if (state.error && state.total === 0)
+              return <pre class="panel error">{state.error}</pre>;
+            return <p class="panel">No posts match this filter.</p>;
+          }}
+        >
+          {(post) => (
+            <article class="panel post-card" data-id={post.id}>
+              <span>#{post.id}</span>
+              <h2>{post.title}</h2>
+              <p>{post.body}</p>
+            </article>
+          )}
+        </For>
+      </div>
     </section>
   );
 }

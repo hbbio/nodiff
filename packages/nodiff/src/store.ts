@@ -1,4 +1,4 @@
-import { addCleanup, clearBetween } from "./lifecycle";
+import { addCleanup, clearBetween, removeNode } from "./lifecycle";
 import { type Action, type Child, toNodes } from "./dom";
 
 export type Equality<T> = (a: T, b: T) => boolean;
@@ -135,6 +135,142 @@ export function list<TState, TItem>(
     (items) => items.map((item, index) => render(item, index, items)),
     options,
   );
+}
+
+export type ForProps<TState, TItem, TKey = unknown> = {
+  store: ReadableStore<TState>;
+  each: Selector<TState, readonly TItem[]>;
+  by: (item: TItem, index: number, items: readonly TItem[]) => TKey;
+  children: (item: TItem, index: number, items: readonly TItem[]) => Child;
+  fallback?: Child | ((state: TState) => Child);
+  equality?: Equality<readonly TItem[]>;
+};
+
+type ForRow<TItem> = {
+  item: TItem;
+  nodes: Node[];
+};
+
+function concreteNodes(value: Child): Node[] {
+  return toNodes(value).flatMap((node) => {
+    if (typeof DocumentFragment !== "undefined" && node instanceof DocumentFragment) {
+      return Array.from(node.childNodes);
+    }
+    return [node];
+  });
+}
+
+function removeNodes(nodes: Node[]): void {
+  for (const node of nodes) removeNode(node);
+}
+
+function keyLabel(key: unknown): string {
+  if (typeof key === "symbol") return key.toString();
+  try {
+    return JSON.stringify(key) ?? String(key);
+  } catch {
+    return String(key);
+  }
+}
+
+export function For<TState, TItem, TKey = unknown>(
+  props: ForProps<TState, TItem, TKey>,
+): DocumentFragment {
+  const start = document.createComment("for:start");
+  const end = document.createComment("for:end");
+  const frag = document.createDocumentFragment();
+  frag.append(start, end);
+
+  let rows = new Map<TKey, ForRow<TItem>>();
+  let fallbackNodes: Node[] = [];
+
+  const clearFallback = () => {
+    removeNodes(fallbackNodes);
+    fallbackNodes = [];
+  };
+
+  const renderFallback = (state: TState): Node[] => {
+    const fallback = props.fallback;
+    if (fallback === undefined) return [];
+    return concreteNodes(typeof fallback === "function" ? fallback(state) : fallback);
+  };
+
+  const renderRow = (item: TItem, index: number, items: readonly TItem[]): Node[] =>
+    concreteNodes(props.children(item, index, items));
+
+  const draw = (items: readonly TItem[], state: TState) => {
+    if (!end.parentNode) return;
+    const parent = end.parentNode;
+    const records = items.map((item, index) => ({
+      item,
+      index,
+      key: props.by(item, index, items),
+    }));
+    const nextKeys = new Set<TKey>();
+
+    for (const record of records) {
+      if (nextKeys.has(record.key)) {
+        throw new Error(`Duplicate key in For: ${keyLabel(record.key)}`);
+      }
+      nextKeys.add(record.key);
+    }
+
+    if (records.length === 0) {
+      for (const row of rows.values()) removeNodes(row.nodes);
+      rows = new Map();
+      clearFallback();
+      fallbackNodes = renderFallback(state);
+      for (const node of fallbackNodes) parent.insertBefore(node, end);
+      return;
+    }
+
+    clearFallback();
+
+    for (const [key, row] of rows) {
+      if (!nextKeys.has(key)) removeNodes(row.nodes);
+    }
+
+    const nextRows = new Map<TKey, ForRow<TItem>>();
+    for (const record of records) {
+      let row = rows.get(record.key);
+
+      if (!row) {
+        row = {
+          item: record.item,
+          nodes: renderRow(record.item, record.index, items),
+        };
+      } else if (!Object.is(row.item, record.item)) {
+        removeNodes(row.nodes);
+        row = {
+          item: record.item,
+          nodes: renderRow(record.item, record.index, items),
+        };
+      }
+
+      for (const node of row.nodes) parent.insertBefore(node, end);
+      nextRows.set(record.key, row);
+    }
+
+    rows = nextRows;
+  };
+
+  draw(props.each(props.store.getState()), props.store.getState());
+
+  const unsubscribe = subscribeSelector(
+    props.store,
+    props.each,
+    (items, _oldItems, state) => draw(items, state),
+    props.equality,
+  );
+
+  addCleanup(start, () => {
+    unsubscribe();
+    for (const row of rows.values()) removeNodes(row.nodes);
+    rows = new Map();
+    clearFallback();
+  });
+
+  return frag;
 }
 
 function setAttributeValue(element: Element, name: string, value: unknown): void {
