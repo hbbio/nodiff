@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { ApiError, createApi } from "../src/api";
 import { createLocalCache } from "../src/cache";
+import { configureSecurityPolicy } from "../src/security";
 import { installDom } from "./test-dom";
 
 type FetchCall = {
@@ -30,11 +31,13 @@ describe("createApi", () => {
   beforeEach(() => {
     cleanupDom = installDom();
     window.location.href = "https://example.test/app";
+    configureSecurityPolicy({});
     previousFetch = globalThis.fetch;
     calls = [];
   });
 
   afterEach(() => {
+    configureSecurityPolicy({});
     globalThis.fetch = previousFetch;
     cleanupDom?.();
     cleanupDom = undefined;
@@ -208,6 +211,51 @@ describe("createApi", () => {
     expect(calls).toHaveLength(2);
     expect(cache.keys()).toHaveLength(2);
     expect(cache.keys().some((key) => key.includes("alice") || key.includes("bob"))).toBe(false);
+  });
+
+  test("adds CSRF tokens to state-changing requests", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      csrf: {
+        getToken: () => "csrf-token",
+        required: "state-changing",
+      },
+    });
+
+    await api.post("/settings", { theme: "dark" });
+    await api.get("/settings");
+
+    expect(new Headers(calls[0]?.init?.headers).get("x-csrf-token")).toBe("csrf-token");
+    expect(new Headers(calls[1]?.init?.headers).get("x-csrf-token")).toBeNull();
+  });
+
+  test("rejects required CSRF requests without a token", async () => {
+    const api = createApi({
+      baseUrl: "/api",
+      csrf: { required: true },
+    });
+
+    await expect(api.post("/settings", {})).rejects.toThrow("CSRF token is required");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("uses double-submit cookie tokens from the active security policy", async () => {
+    configureSecurityPolicy({ csrf: "double-submit-cookie" });
+    document.cookie = "XSRF-TOKEN=cookie-token";
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({ baseUrl: "/api" });
+    await api.patch("/profile", { name: "Ada" });
+
+    expect(new Headers(calls[0]?.init?.headers).get("x-csrf-token")).toBe("cookie-token");
   });
 
   test("checks required auth before reading GET cache entries", async () => {

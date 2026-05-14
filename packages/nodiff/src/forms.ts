@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { CsrfError, csrfFieldName, readCsrfToken, type CsrfFormOptions } from "./csrf";
 import type { Action } from "./dom";
 
 export type FormValues = Record<string, FormDataEntryValue | FormDataEntryValue[]>;
@@ -48,18 +49,55 @@ export function applyZodValidity(form: HTMLFormElement, error: z.ZodError): void
   form.reportValidity();
 }
 
+function csrfOptions(option: true | CsrfFormOptions): CsrfFormOptions {
+  return option === true
+    ? { cookieName: "XSRF-TOKEN", fieldName: "_csrf", required: true }
+    : option;
+}
+
+function ensureCsrfField(form: HTMLFormElement, options: CsrfFormOptions): string | null {
+  const token = readCsrfToken(options);
+  if (!token) return null;
+
+  const name = csrfFieldName(options);
+  let field = Array.from(form.querySelectorAll('input[type="hidden"]')).find(
+    (input): input is HTMLInputElement => input instanceof HTMLInputElement && input.name === name,
+  );
+  if (!field) {
+    field = document.createElement("input");
+    field.type = "hidden";
+    field.name = name;
+    form.appendChild(field);
+  }
+  field.value = token;
+  return token;
+}
+
 export function zodSubmit<T>(
   schema: z.ZodType<T>,
   handler: (values: T, event: SubmitEvent, form: HTMLFormElement) => void | Promise<void>,
   options: {
     onError?: (error: z.ZodError, form: HTMLFormElement) => void;
+    onCsrfError?: (error: CsrfError, form: HTMLFormElement) => void;
     resetOnSuccess?: boolean;
+    csrf?: boolean | CsrfFormOptions;
   } = {},
 ): Action<HTMLFormElement> {
   return (form) => {
+    const csrf = options.csrf ? csrfOptions(options.csrf) : null;
+    if (csrf) ensureCsrfField(form, csrf);
+
     const submit = async (event: SubmitEvent) => {
       event.preventDefault();
       clearFormValidity(form);
+
+      if (csrf) {
+        const token = ensureCsrfField(form, csrf);
+        if (!token && csrf.required !== false) {
+          options.onCsrfError?.(new CsrfError(), form);
+          return;
+        }
+      }
 
       const parsed = schema.safeParse(formValues(form));
       if (!parsed.success) {

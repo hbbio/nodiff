@@ -1,5 +1,7 @@
 import type { z } from "zod";
 import { createLocalCache, type LocalCache, type CacheWriteOptions } from "./cache";
+import { csrfHeaderName, defaultCookieCsrf, readCsrfToken, type CsrfRequestOptions } from "./csrf";
+import { getSecurityPolicy } from "./security";
 
 export type ApiSchema<T> = z.ZodType<T>;
 
@@ -19,6 +21,7 @@ export type ApiRequestOptions<T> = {
   schema?: ApiSchema<T>;
   cache?: ApiCacheOptions | false;
   auth?: false | "optional" | "required";
+  csrf?: boolean | CsrfRequestOptions;
   credentials?: RequestCredentials;
 };
 
@@ -28,6 +31,7 @@ export type ApiClientOptions = {
   cache?: LocalCache;
   getToken?: () => string | null | undefined;
   getAuthHeaders?: () => HeadersInit | null | undefined;
+  csrf?: CsrfRequestOptions;
   refreshAuth?: () => Promise<void>;
   onUnauthorized?: (error: ApiError) => void;
 };
@@ -102,6 +106,10 @@ function isJsonBody(body: unknown): boolean {
   return true;
 }
 
+function isStateChanging(method: string): boolean {
+  return method !== "GET";
+}
+
 async function readPayload(response: Response): Promise<unknown> {
   if (response.status === 204) return undefined;
   const contentType = response.headers.get("content-type") ?? "";
@@ -114,6 +122,7 @@ export function createApi(options: ApiClientOptions = {}) {
   const managedAuthOrigin = authOrigin(options.baseUrl);
 
   function buildHeaders(url: URL, request: ApiRequestOptions<unknown>): Headers {
+    const method = request.method ?? (request.body === undefined ? "GET" : "POST");
     const canUseClientHeaders = url.origin === managedAuthOrigin;
     const headers = new Headers();
     if (canUseClientHeaders) applyHeaders(headers, options.headers);
@@ -127,6 +136,30 @@ export function createApi(options: ApiClientOptions = {}) {
         const token = options.getToken?.();
         if (token) headers.set("Authorization", `Bearer ${token}`);
       }
+    }
+
+    const policyRequiresCsrf =
+      getSecurityPolicy().csrf === "double-submit-cookie" && isStateChanging(method);
+    const clientCsrf =
+      options.csrf || policyRequiresCsrf ? defaultCookieCsrf(options.csrf) : undefined;
+    const requestCsrf =
+      request.csrf === true
+        ? defaultCookieCsrf(clientCsrf)
+        : typeof request.csrf === "object"
+          ? defaultCookieCsrf({ ...clientCsrf, ...request.csrf })
+          : clientCsrf;
+    const requestWantsCsrf = request.csrf === true || typeof request.csrf === "object";
+    const clientWantsCsrf = Boolean(options.csrf) && isStateChanging(method);
+    const csrfRequired =
+      request.csrf === true ||
+      requestCsrf?.required === true ||
+      (requestCsrf?.required === "state-changing" && isStateChanging(method)) ||
+      policyRequiresCsrf;
+
+    if (request.csrf !== false && (requestWantsCsrf || clientWantsCsrf || policyRequiresCsrf)) {
+      const token = readCsrfToken(requestCsrf);
+      if (token) headers.set(csrfHeaderName(requestCsrf), token);
+      else if (csrfRequired) throw new Error("CSRF token is required for this request.");
     }
 
     return headers;
