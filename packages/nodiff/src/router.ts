@@ -308,7 +308,7 @@ export function createRouter<TMeta = unknown>(
 
       const click = (event: MouseEvent) => {
         if (typeof onClick === "function")
-          onClick(event as MouseEvent & { currentTarget: HTMLAnchorElement });
+          onClick(event as unknown as PointerEvent & { currentTarget: HTMLAnchorElement });
         if (event.defaultPrevented) return;
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
           return;

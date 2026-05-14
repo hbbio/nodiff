@@ -197,6 +197,7 @@ describe("DOM runtime", () => {
     const objectRef: { current: HTMLInputElement | null } = { current: null };
     let functionRef: Element | null = null;
     let pairClicks = 0;
+    let doubleClicks = 0;
     let helperClicks = 0;
     const circular: Record<string, unknown> = {};
     circular.self = circular;
@@ -216,6 +217,9 @@ describe("DOM runtime", () => {
           },
           { once: true },
         ],
+        onDoubleClick: () => {
+          doubleClicks += 1;
+        },
         "data-count": 2,
         "data-symbol": Symbol("flag") as unknown as string,
         "data-object": { ok: true } as unknown as string,
@@ -266,9 +270,11 @@ describe("DOM runtime", () => {
 
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     expect(pairClicks).toBe(1);
+    expect(doubleClicks).toBe(1);
     expect(helperClicks).toBe(1);
 
     unmount();

@@ -4,7 +4,9 @@ import { getSecurityPolicy } from "./security";
 
 export type PrimitiveChild = string | number | bigint | boolean | null | undefined;
 export type Child = PrimitiveChild | Node | Child[] | Iterable<Child>;
-export type Component<P = Record<string, unknown>> = (props: P & { children?: Child }) => Child;
+export type Component<P extends object = Record<string, unknown>> = (
+  props: P & { children?: Child },
+) => Child;
 export type Ref<T extends Node = Node> = ((node: T) => void) | { current: T | null };
 export type Action<T extends Element = Element> = (element: T) => void | (() => void);
 export type ErrorBoundaryProps = {
@@ -26,16 +28,250 @@ export type StyleValue =
   | Partial<CSSStyleDeclaration>
   | Record<string, string | number | null | undefined>;
 
-export type ElementProps<T extends Element = Element> = {
+export type ClassValue =
+  | string
+  | string[]
+  | Record<string, boolean | undefined | null>
+  | false
+  | null
+  | undefined;
+export type AttributeValue = string | number | boolean | null | undefined;
+export type EventHandler<T extends Element, TEvent extends Event> = (
+  event: TEvent & { currentTarget: T },
+) => void;
+export type EventProp<T extends Element, TEvent extends Event> =
+  | EventHandler<T, TEvent>
+  | [EventHandler<T, TEvent>, AddEventListenerOptions?];
+
+type EmptyPropValue = false | null | undefined;
+type ElementPropertyValue<TValue> =
+  | TValue
+  | (TValue extends string ? number | bigint : never)
+  | (TValue extends number ? `${number}` : never)
+  | EmptyPropValue;
+type ReservedElementProp =
+  | "aria"
+  | "attributes"
+  | "children"
+  | "class"
+  | "classList"
+  | "className"
+  | "dataset"
+  | "innerHTML"
+  | "key"
+  | "outerHTML"
+  | "ref"
+  | "style"
+  | "textContent"
+  | "unsafeHTML"
+  | "use"
+  | `on${string}`;
+type ElementPropertyProps<T extends Element, TExcluded extends string = never> = {
+  [K in keyof T as K extends string
+    ? K extends ReservedElementProp | TExcluded
+      ? never
+      : T[K] extends (...args: unknown[]) => unknown
+        ? never
+        : K
+    : never]?: ElementPropertyValue<T[K]>;
+};
+type DataAriaAttributes = {
+  [K in `data-${string}`]?: AttributeValue;
+} & {
+  [K in `aria-${string}`]?: AttributeValue;
+};
+type DashAttributes = {
+  [K in `${string}-${string}`]?: AttributeValue;
+} & {
+  [K in `on-${string}`]?: never;
+};
+type SharedAttributes = {
+  role?: string | false | null | undefined;
+};
+type HTMLAttributeAliases = {
+  "accept-charset"?: AttributeValue;
+  autocapitalize?: AttributeValue;
+  autocomplete?: AttributeValue;
+  autocorrect?: AttributeValue;
+  autofocus?: AttributeValue;
+  colspan?: AttributeValue;
+  contenteditable?: AttributeValue;
+  crossorigin?: AttributeValue;
+  enterkeyhint?: AttributeValue;
+  for?: AttributeValue;
+  formnovalidate?: AttributeValue;
+  "http-equiv"?: AttributeValue;
+  inputmode?: AttributeValue;
+  maxlength?: AttributeValue;
+  minlength?: AttributeValue;
+  nomodule?: AttributeValue;
+  novalidate?: AttributeValue;
+  playsinline?: AttributeValue;
+  readonly?: AttributeValue;
+  rowspan?: AttributeValue;
+  spellcheck?: AttributeValue;
+  srcset?: AttributeValue;
+  tabindex?: AttributeValue;
+  usemap?: AttributeValue;
+};
+type SVGAttributeProps = {
+  alignmentBaseline?: AttributeValue;
+  baselineShift?: AttributeValue;
+  clipPath?: AttributeValue;
+  clipRule?: AttributeValue;
+  colorInterpolation?: AttributeValue;
+  colorInterpolationFilters?: AttributeValue;
+  cx?: AttributeValue;
+  cy?: AttributeValue;
+  d?: AttributeValue;
+  dominantBaseline?: AttributeValue;
+  fill?: AttributeValue;
+  fillOpacity?: AttributeValue;
+  fillRule?: AttributeValue;
+  filter?: AttributeValue;
+  floodColor?: AttributeValue;
+  floodOpacity?: AttributeValue;
+  fontFamily?: AttributeValue;
+  fontSize?: AttributeValue;
+  fontStretch?: AttributeValue;
+  fontStyle?: AttributeValue;
+  fontVariant?: AttributeValue;
+  fontWeight?: AttributeValue;
+  gradientTransform?: AttributeValue;
+  gradientUnits?: AttributeValue;
+  height?: AttributeValue;
+  markerEnd?: AttributeValue;
+  markerMid?: AttributeValue;
+  markerStart?: AttributeValue;
+  mask?: AttributeValue;
+  offset?: AttributeValue;
+  opacity?: AttributeValue;
+  pathLength?: AttributeValue;
+  patternContentUnits?: AttributeValue;
+  patternTransform?: AttributeValue;
+  patternUnits?: AttributeValue;
+  points?: AttributeValue;
+  preserveAspectRatio?: AttributeValue;
+  r?: AttributeValue;
+  rx?: AttributeValue;
+  ry?: AttributeValue;
+  stopColor?: AttributeValue;
+  stopOpacity?: AttributeValue;
+  stroke?: AttributeValue;
+  strokeDasharray?: AttributeValue;
+  strokeDashoffset?: AttributeValue;
+  strokeLinecap?: AttributeValue;
+  strokeLinejoin?: AttributeValue;
+  strokeMiterlimit?: AttributeValue;
+  strokeOpacity?: AttributeValue;
+  strokeWidth?: AttributeValue;
+  textAnchor?: AttributeValue;
+  transform?: AttributeValue;
+  vectorEffect?: AttributeValue;
+  viewBox?: AttributeValue;
+  width?: AttributeValue;
+  x?: AttributeValue;
+  x1?: AttributeValue;
+  x2?: AttributeValue;
+  xlinkHref?: AttributeValue;
+  xmlns?: AttributeValue;
+  y?: AttributeValue;
+  y1?: AttributeValue;
+  y2?: AttributeValue;
+} & {
+  "alignment-baseline"?: AttributeValue;
+  "baseline-shift"?: AttributeValue;
+  "clip-path"?: AttributeValue;
+  "clip-rule"?: AttributeValue;
+  "color-interpolation"?: AttributeValue;
+  "color-interpolation-filters"?: AttributeValue;
+  "dominant-baseline"?: AttributeValue;
+  "fill-opacity"?: AttributeValue;
+  "fill-rule"?: AttributeValue;
+  "flood-color"?: AttributeValue;
+  "flood-opacity"?: AttributeValue;
+  "font-family"?: AttributeValue;
+  "font-size"?: AttributeValue;
+  "font-stretch"?: AttributeValue;
+  "font-style"?: AttributeValue;
+  "font-variant"?: AttributeValue;
+  "font-weight"?: AttributeValue;
+  "gradient-transform"?: AttributeValue;
+  "gradient-units"?: AttributeValue;
+  "marker-end"?: AttributeValue;
+  "marker-mid"?: AttributeValue;
+  "marker-start"?: AttributeValue;
+  "path-length"?: AttributeValue;
+  "pattern-content-units"?: AttributeValue;
+  "pattern-transform"?: AttributeValue;
+  "pattern-units"?: AttributeValue;
+  "preserve-aspect-ratio"?: AttributeValue;
+  "stop-color"?: AttributeValue;
+  "stop-opacity"?: AttributeValue;
+  "stroke-dasharray"?: AttributeValue;
+  "stroke-dashoffset"?: AttributeValue;
+  "stroke-linecap"?: AttributeValue;
+  "stroke-linejoin"?: AttributeValue;
+  "stroke-miterlimit"?: AttributeValue;
+  "stroke-opacity"?: AttributeValue;
+  "stroke-width"?: AttributeValue;
+  "text-anchor"?: AttributeValue;
+  "vector-effect"?: AttributeValue;
+  "xlink:href"?: AttributeValue;
+};
+type EventProps<T extends Element> = {
+  [K in keyof GlobalEventHandlersEventMap as `on${Capitalize<string & K>}`]?: EventProp<
+    T,
+    GlobalEventHandlersEventMap[K]
+  >;
+} & {
+  onAnimationEnd?: EventProp<T, AnimationEvent>;
+  onAnimationIteration?: EventProp<T, AnimationEvent>;
+  onAnimationStart?: EventProp<T, AnimationEvent>;
+  onBeforeInput?: EventProp<T, InputEvent>;
+  onContextMenu?: EventProp<T, MouseEvent>;
+  onDoubleClick?: EventProp<T, MouseEvent>;
+  onDragEnd?: EventProp<T, DragEvent>;
+  onDragEnter?: EventProp<T, DragEvent>;
+  onDragLeave?: EventProp<T, DragEvent>;
+  onDragOver?: EventProp<T, DragEvent>;
+  onDragStart?: EventProp<T, DragEvent>;
+  onFocusIn?: EventProp<T, FocusEvent>;
+  onFocusOut?: EventProp<T, FocusEvent>;
+  onKeyDown?: EventProp<T, KeyboardEvent>;
+  onKeyUp?: EventProp<T, KeyboardEvent>;
+  onMouseDown?: EventProp<T, MouseEvent>;
+  onMouseEnter?: EventProp<T, MouseEvent>;
+  onMouseLeave?: EventProp<T, MouseEvent>;
+  onMouseMove?: EventProp<T, MouseEvent>;
+  onMouseOut?: EventProp<T, MouseEvent>;
+  onMouseOver?: EventProp<T, MouseEvent>;
+  onMouseUp?: EventProp<T, MouseEvent>;
+  onPointerDown?: EventProp<T, PointerEvent>;
+  onPointerEnter?: EventProp<T, PointerEvent>;
+  onPointerLeave?: EventProp<T, PointerEvent>;
+  onPointerMove?: EventProp<T, PointerEvent>;
+  onPointerOut?: EventProp<T, PointerEvent>;
+  onPointerOver?: EventProp<T, PointerEvent>;
+  onPointerUp?: EventProp<T, PointerEvent>;
+  onTouchCancel?: EventProp<T, TouchEvent>;
+  onTouchEnd?: EventProp<T, TouchEvent>;
+  onTouchMove?: EventProp<T, TouchEvent>;
+  onTouchStart?: EventProp<T, TouchEvent>;
+  onTransitionEnd?: EventProp<T, TransitionEvent>;
+};
+
+type BaseElementProps<T extends Element, TExcluded extends string = never> = CommonElementProps<T> &
+  EventProps<T> &
+  SharedAttributes &
+  DataAriaAttributes &
+  DashAttributes &
+  ElementPropertyProps<T, TExcluded>;
+
+export type CommonElementProps<T extends Element = Element> = {
   children?: Child;
-  class?: string | string[] | Record<string, boolean | undefined | null> | false | null | undefined;
-  className?:
-    | string
-    | string[]
-    | Record<string, boolean | undefined | null>
-    | false
-    | null
-    | undefined;
+  class?: ClassValue;
+  className?: ClassValue;
   style?: StyleValue;
   ref?: Ref<T>;
   use?: Action<T> | Array<Action<T> | false | null | undefined> | false | null | undefined;
@@ -44,19 +280,35 @@ export type ElementProps<T extends Element = Element> = {
   aria?: Record<string, string | number | boolean | null | undefined>;
   unsafeHTML?: TrustedHTML;
   textContent?: string | number | null | undefined;
-  onClick?: (event: MouseEvent & { currentTarget: T }) => void;
-  onInput?: (event: InputEvent & { currentTarget: T }) => void;
-  onChange?: (event: Event & { currentTarget: T }) => void;
-  onSubmit?: (event: SubmitEvent & { currentTarget: T }) => void;
-  onKeydown?: (event: KeyboardEvent & { currentTarget: T }) => void;
-  onKeyup?: (event: KeyboardEvent & { currentTarget: T }) => void;
-  onFocus?: (event: FocusEvent & { currentTarget: T }) => void;
-  onBlur?: (event: FocusEvent & { currentTarget: T }) => void;
-  [key: `on${string}`]: unknown;
-  [key: `data-${string}`]: string | number | boolean | null | undefined;
-  [key: `aria-${string}`]: string | number | boolean | null | undefined;
-  [key: string]: unknown;
 };
+
+export type HTMLElementProps<T extends HTMLElement = HTMLElement> = BaseElementProps<T> &
+  HTMLAttributeAliases;
+export type SVGElementProps<T extends SVGElement = SVGElement> = BaseElementProps<
+  T,
+  Extract<keyof SVGAttributeProps, string>
+> &
+  SVGAttributeProps;
+export type ElementProps<T extends Element = Element> = T extends SVGElement
+  ? SVGElementProps<T>
+  : T extends HTMLElement
+    ? HTMLElementProps<T>
+    : BaseElementProps<T>;
+export type HTMLIntrinsicElements = {
+  [K in keyof HTMLElementTagNameMap]: HTMLElementProps<HTMLElementTagNameMap[K]>;
+};
+export type SVGIntrinsicElements = {
+  [K in Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>]: SVGElementProps<
+    SVGElementTagNameMap[K]
+  >;
+};
+export type CustomElementProps = HTMLElementProps<HTMLElement> & Record<string, unknown>;
+export type CustomIntrinsicElements = {
+  [K in `${string}-${string}`]: CustomElementProps;
+};
+export type IntrinsicElements = HTMLIntrinsicElements &
+  SVGIntrinsicElements &
+  CustomIntrinsicElements;
 
 const svgTags = new Set([
   "svg",
@@ -130,11 +382,13 @@ function isNode(value: unknown): value is Node {
   return typeof Node !== "undefined" && value instanceof Node;
 }
 
+const eventAliases = new Map([["DoubleClick", "dblclick"]]);
+
 function toEventName(prop: string): string | null {
   if (!prop.startsWith("on") || prop.length <= 2) return null;
   const raw = prop.slice(2);
   if (!raw) return null;
-  return raw.toLowerCase();
+  return eventAliases.get(raw) ?? raw.toLowerCase();
 }
 
 function classValue(value: ElementProps["class"]): string | undefined {
@@ -320,7 +574,7 @@ function applyRef<T extends Node>(node: T, ref: Ref<T>): void {
   });
 }
 
-function applyAction<T extends Element>(element: T, action: ElementProps<T>["use"]): void {
+function applyAction<T extends Element>(element: T, action: CommonElementProps<T>["use"]): void {
   if (!action) return;
   const actions = Array.isArray(action) ? action : [action];
   for (const item of actions) {
@@ -459,7 +713,24 @@ export function append(parent: Node, value: Child): void {
   }
 }
 
-export function jsx(type: string | Component<unknown>, props: ElementProps | null): Child {
+export function jsx<P extends object>(
+  type: Component<P>,
+  props: (P & { children?: Child }) | null,
+): Child;
+export function jsx<K extends keyof HTMLElementTagNameMap>(
+  type: K,
+  props: HTMLElementProps<HTMLElementTagNameMap[K]> | null,
+): Child;
+export function jsx<K extends keyof SVGElementTagNameMap>(
+  type: K,
+  props: SVGElementProps<SVGElementTagNameMap[K]> | null,
+): Child;
+export function jsx<K extends keyof CustomIntrinsicElements>(
+  type: K,
+  props: CustomElementProps | null,
+): Child;
+export function jsx(type: string, props: ElementProps | null): Child;
+export function jsx(type: string | Component<any>, props: Record<string, unknown> | null): Child {
   if (typeof type === "function") {
     return type({ ...props });
   }
@@ -481,7 +752,7 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
     currentProps.unsafeHTML === undefined &&
     currentProps.textContent === undefined
   ) {
-    append(element, currentProps.children);
+    append(element, currentProps.children as Child);
   }
 
   if (currentProps.use !== undefined) {

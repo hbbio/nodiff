@@ -6,7 +6,14 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@nodiffjs/core",
+    "paths": {
+      "@nodiffjs/core": ["./src/index.ts"],
+      "@nodiffjs/core/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "@nodiffjs/core/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "test-types"]
 }

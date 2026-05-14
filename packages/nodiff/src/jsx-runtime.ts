@@ -1,10 +1,10 @@
 export { Fragment, jsx, jsxs } from "./dom";
 
-import type { Child, ElementProps } from "./dom";
+import type { Child, Component, IntrinsicElements as DomIntrinsicElements } from "./dom";
 
 export namespace JSX {
   export type Element = Child;
-  export type ElementType = string | ((props: any) => Child);
+  export type ElementType = keyof DomIntrinsicElements | Component<any>;
 
   export interface ElementChildrenAttribute {
     children: Record<string, never>;
@@ -14,7 +14,5 @@ export namespace JSX {
     key?: unknown;
   }
 
-  export interface IntrinsicElements {
-    [elementName: string]: ElementProps<any>;
-  }
+  export type IntrinsicElements = DomIntrinsicElements;
 }
