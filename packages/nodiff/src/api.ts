@@ -56,11 +56,11 @@ function resolveUrl(
   baseUrl: string | undefined,
   path: string,
   query: Record<string, QueryValue> | undefined,
-): string {
+): URL {
   if (/^https?:\/\//i.test(path)) {
     const url = new URL(path);
     appendQuery(url, query);
-    return url.toString();
+    return url;
   }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
@@ -70,7 +70,12 @@ function resolveUrl(
     : new URL(path.startsWith("/") ? path : `/${path}`, base);
 
   appendQuery(url, query);
-  return url.toString();
+  return url;
+}
+
+function authOrigin(baseUrl: string | undefined): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  return new URL(baseUrl ?? origin, origin).origin;
 }
 
 function applyHeaders(target: Headers, source: HeadersInit | null | undefined): void {
@@ -97,17 +102,15 @@ async function readPayload(response: Response): Promise<unknown> {
 
 export function createApi(options: ApiClientOptions = {}) {
   const cache = options.cache ?? createLocalCache("nodiff:http:");
+  const managedAuthOrigin = authOrigin(options.baseUrl);
 
-  async function runFetch<T>(
-    url: string,
-    request: ApiRequestOptions<T>,
-    retry: boolean,
-  ): Promise<T> {
+  async function runFetch<T>(url: URL, request: ApiRequestOptions<T>, retry: boolean): Promise<T> {
+    const canUseClientHeaders = url.origin === managedAuthOrigin;
     const headers = new Headers();
-    applyHeaders(headers, options.headers);
+    if (canUseClientHeaders) applyHeaders(headers, options.headers);
     applyHeaders(headers, request.headers);
 
-    if (request.auth !== false) {
+    if (request.auth !== false && canUseClientHeaders) {
       const authHeaders = options.getAuthHeaders?.();
       if (authHeaders) {
         applyHeaders(headers, authHeaders);
@@ -115,10 +118,10 @@ export function createApi(options: ApiClientOptions = {}) {
         const token = options.getToken?.();
         if (token) headers.set("Authorization", `Bearer ${token}`);
       }
+    }
 
-      if (request.auth === "required" && !headers.has("Authorization")) {
-        throw new Error("Authentication token is required for this request.");
-      }
+    if (request.auth === "required" && !headers.has("Authorization")) {
+      throw new Error("Authentication token is required for this request.");
     }
 
     const body = request.body;
@@ -138,7 +141,8 @@ export function createApi(options: ApiClientOptions = {}) {
       }
     }
 
-    const response = await fetch(url, init);
+    const href = url.toString();
+    const response = await fetch(href, init);
     const payload = await readPayload(response);
 
     if (response.status === 401 && retry && options.refreshAuth) {
@@ -147,7 +151,7 @@ export function createApi(options: ApiClientOptions = {}) {
     }
 
     if (!response.ok) {
-      const error = new ApiError(response.status, response.statusText, url, payload);
+      const error = new ApiError(response.status, response.statusText, href, payload);
       if (response.status === 401) options.onUnauthorized?.(error);
       throw error;
     }
@@ -163,7 +167,7 @@ export function createApi(options: ApiClientOptions = {}) {
     const url = resolveUrl(options.baseUrl, path, requestOptions.query);
     const cacheOptions = requestOptions.cache;
     const canCache = method === "GET" && cacheOptions !== false && cacheOptions !== undefined;
-    const cacheKey = canCache ? (cacheOptions.key ?? `${method}:${url}`) : "";
+    const cacheKey = canCache ? (cacheOptions.key ?? `${method}:${url.toString()}`) : "";
 
     if (canCache) {
       const hit = cache.get<T>(cacheKey, requestOptions.schema, {

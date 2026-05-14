@@ -78,6 +78,52 @@ describe("createApi", () => {
     expect(calls[0]?.url).toBe("https://other.test/public?q=search");
   });
 
+  test("does not send managed auth headers to other origins", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      headers: { "X-App-Token": "app-secret" },
+      getToken: () => "user-secret",
+    });
+
+    await api.get("https://other.test/public");
+
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(headers.get("authorization")).toBeNull();
+    expect(headers.get("x-app-token")).toBeNull();
+  });
+
+  test("keeps managed auth headers on the configured API origin", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "https://api.example.test/v1",
+      getToken: () => "token",
+    });
+
+    await api.get("https://api.example.test/v1/me");
+
+    expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe("Bearer token");
+  });
+
+  test("requires explicit auth headers for required auth on other origins", async () => {
+    const api = createApi({
+      baseUrl: "/api",
+      getToken: () => "token",
+    });
+
+    await expect(api.get("https://other.test/secret", { auth: "required" })).rejects.toThrow(
+      "Authentication token is required",
+    );
+  });
+
   test("serializes JSON bodies and parses schemas", async () => {
     globalThis.fetch = async (url, init) => {
       calls.push({ url: inputUrl(url), init });
