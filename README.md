@@ -464,6 +464,10 @@ const posts = createResource({
 });
 ```
 
+When a resource has required args, `immediate: true` must include `initialArgs`. `refresh()` reuses
+the last successful `load(...)` args or `initialArgs`; before any args are known it resolves to
+`undefined` without calling your loader.
+
 The resource state is explicit:
 
 ```ts
@@ -798,6 +802,7 @@ auth.store.subscribe((state) => {
 
 ```ts
 const users = createResource<User[], { search: string }>({
+  initialArgs: { search: "" },
   initialData: [],
   load: ({ search }, { signal }) =>
     api.get("/users", {
@@ -807,6 +812,7 @@ const users = createResource<User[], { search: string }>({
     }),
 });
 
+users.refresh(); // uses initialArgs until load(...) provides new args
 users.load({ search: "ada" });
 users.refresh();
 users.mutate((current) => [...(current ?? []), newUser]);

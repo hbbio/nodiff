@@ -168,6 +168,54 @@ describe("createResource", () => {
     });
   });
 
+  test("does not refresh before required args are known", async () => {
+    const calls: string[] = [];
+    const resource = createResource<string, string>({
+      load: async (args) => {
+        calls.push(args);
+        return args;
+      },
+    });
+
+    await expect(resource.refresh()).resolves.toBeUndefined();
+
+    expect(calls).toEqual([]);
+    expect(resource.store.getState()).toMatchObject({
+      data: null,
+      loading: false,
+      stale: false,
+      status: "idle",
+    });
+  });
+
+  test("uses initial args for immediate loads, refreshes, and reset", async () => {
+    const calls: number[] = [];
+    const resource = createResource<string, { page: number }>({
+      immediate: true,
+      initialArgs: { page: 1 },
+      load: async (args) => {
+        calls.push(args.page);
+        return `page:${args.page}`;
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual([1]);
+    expect(resource.store.getState()).toMatchObject({
+      data: "page:1",
+      loading: false,
+      status: "success",
+    });
+
+    await expect(resource.refresh()).resolves.toBe("page:1");
+    await expect(resource.load({ page: 2 })).resolves.toBe("page:2");
+    await expect(resource.refresh()).resolves.toBe("page:2");
+
+    resource.reset();
+    await expect(resource.refresh()).resolves.toBe("page:1");
+    expect(calls).toEqual([1, 1, 2, 2, 1]);
+  });
+
   test("can start loading immediately", async () => {
     const resource = createResource<string>({
       immediate: true,

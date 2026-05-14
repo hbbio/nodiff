@@ -1,4 +1,4 @@
-import { createStore } from "zustand/vanilla";
+import { createStore, type StoreApi } from "zustand/vanilla";
 
 export type ResourceStatus = "idle" | "loading" | "success" | "error";
 
@@ -15,13 +15,54 @@ export type ResourceContext = {
   signal: AbortSignal;
 };
 
-export type ResourceOptions<T, TArgs> = {
+type ResourceOptionsBase<T> = {
   initialData?: T | null;
+};
+
+type OptionalArgsResourceOptions<T, TArgs> = ResourceOptionsBase<T> & {
+  initialArgs?: TArgs;
   immediate?: boolean;
   load(args: TArgs, context: ResourceContext): Promise<T>;
 };
 
-export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArgs>) {
+type RequiredArgsResourceOptions<T, TArgs> = ResourceOptionsBase<T> & {
+  load(args: TArgs, context: ResourceContext): Promise<T>;
+} & (
+    | {
+        initialArgs: TArgs;
+        immediate?: boolean;
+      }
+    | {
+        initialArgs?: TArgs;
+        immediate?: false;
+      }
+  );
+
+export type ResourceOptions<T, TArgs = void> = [undefined] extends [TArgs]
+  ? OptionalArgsResourceOptions<T, TArgs>
+  : RequiredArgsResourceOptions<T, TArgs>;
+
+type ResourceLoad<T, TArgs> = [undefined] extends [TArgs]
+  ? (args?: TArgs) => Promise<T | undefined>
+  : (args: TArgs) => Promise<T | undefined>;
+
+export type Resource<T, TArgs = void> = {
+  store: StoreApi<ResourceState<T>>;
+  load: ResourceLoad<T, TArgs>;
+  refresh(): Promise<T | undefined>;
+  mutate(next: T | ((current: T | null) => T)): void;
+  reset(): void;
+  abort(): void;
+};
+
+const hasOwn = (value: object, key: PropertyKey): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
+
+export function createResource<T>(options: ResourceOptions<T, void>): Resource<T, void>;
+export function createResource<T, TArgs>(options: ResourceOptions<T, TArgs>): Resource<T, TArgs>;
+export function createResource<T, TArgs = void>(
+  options: ResourceOptions<T, TArgs>,
+): Resource<T, TArgs> {
   const initialData = options.initialData ?? null;
   const store = createStore<ResourceState<T>>(() => ({
     status: initialData === null ? "idle" : "success",
@@ -32,7 +73,10 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     stale: false,
   }));
 
-  let lastArgs: TArgs | undefined;
+  const hasInitialArgs = hasOwn(options, "initialArgs");
+  const initialArgs = hasInitialArgs ? (options as { initialArgs: TArgs }).initialArgs : undefined;
+  let lastArgs = initialArgs;
+  let hasLastArgs = hasInitialArgs;
   let controller: AbortController | null = null;
   let requestId = 0;
 
@@ -57,6 +101,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
 
   async function load(args?: TArgs): Promise<T | undefined> {
     lastArgs = args as TArgs;
+    hasLastArgs = true;
     const currentRequestId = ++requestId;
     controller?.abort();
     const requestController = new AbortController();
@@ -101,7 +146,8 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
   }
 
   function refresh(): Promise<T | undefined> {
-    return load(lastArgs as TArgs);
+    if (!hasLastArgs) return Promise.resolve(undefined);
+    return load(lastArgs);
   }
 
   function mutate(next: T | ((current: T | null) => T)): void {
@@ -119,6 +165,8 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     requestId += 1;
     controller?.abort();
     controller = null;
+    lastArgs = initialArgs;
+    hasLastArgs = hasInitialArgs;
     store.setState({
       status: initialData === null ? "idle" : "success",
       data: initialData,
@@ -129,11 +177,11 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     });
   }
 
-  if (options.immediate) void load(undefined as TArgs);
+  if (options.immediate) void load(lastArgs);
 
   return {
     store,
-    load,
+    load: load as ResourceLoad<T, TArgs>,
     refresh,
     mutate,
     reset,
@@ -147,5 +195,3 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     },
   };
 }
-
-export type Resource<T, TArgs = void> = ReturnType<typeof createResource<T, TArgs>>;
