@@ -36,14 +36,12 @@ function PostsToolbar() {
     <div class="join">
       <button
         class="btn btn-primary join-item"
-        use={[
-          bind.attr("disabled", postsVm, (state) => state.loading),
-          bind.aria("busy", postsVm, (state) => state.loading),
-          bind.classes(postsVm, (state) => ({ "btn-disabled": state.loading })),
-          bind.prop("title", postsVm, (state) =>
-            state.loading ? "Refreshing zod-checked posts" : "Refresh posts",
-          ),
-        ]}
+        use={bind.props(postsVm, (state) => ({
+          disabled: state.loading,
+          aria: { busy: state.loading },
+          class: { "btn-disabled": state.loading },
+          title: state.loading ? "Refreshing zod-checked posts" : "Refresh posts",
+        }))}
         onClick={() => void posts.refresh()}
       >
         Refresh

@@ -42,10 +42,10 @@ export function HomePage() {
             hint={text(postsVm, (state) =>
               state.stale ? "Stale cache visible while refreshing" : "Zod-validated API data",
             )}
-            use={[
-              bind.prop("title", postsVm, (state) => `${state.total} parsed posts in memory`),
-              bind.classes(postsVm, (state) => ({ "text-warning": state.loading })),
-            ]}
+            use={bind.props(postsVm, (state) => ({
+              title: `${state.total} parsed posts in memory`,
+              class: { "text-warning": state.loading },
+            }))}
           />
         </section>
         <ThemeCard />

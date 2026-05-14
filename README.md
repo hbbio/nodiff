@@ -709,6 +709,7 @@ bind.class(name, store, selector, equality?);
 bind.classes(store, selector, equality?);
 bind.style(store, selector, equality?);
 bind.prop(name, store, selector, equality?);
+bind.props(store, selector, equality?);
 bind.dataset(name, store, selector, equality?);
 bind.aria(name, store, selector, equality?);
 bind.value(store, selector, commit, options?);
@@ -721,6 +722,19 @@ bind.files(store, commit);
 ```
 
 Use `text` for inline text nodes. Use `bind.text` when the element already exists and should receive `textContent`. Use `view` for regions. Use `effect` for side effects tied to a node lifecycle.
+
+Use `bind.props` when several element states should move together:
+
+```tsx
+<button
+  use={bind.props(postsVm, (state) => ({
+    disabled: state.loading,
+    aria: { busy: state.loading },
+    class: { "btn-disabled": state.loading },
+    title: state.loading ? "Refreshing posts" : "Refresh posts",
+  }))}
+/>
+```
 
 ### Cache
 

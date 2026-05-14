@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
 import { jsx, mount } from "../src/dom";
 import { configureSecurityPolicy } from "../src/security";
-import { bind, type ClassBinding, type StyleBinding } from "../src/store";
+import { bind, type ClassBinding, type PropsBinding, type StyleBinding } from "../src/store";
 import { installDom } from "./test-dom";
 
 type BindingState = {
@@ -97,6 +97,115 @@ describe("bind helpers", () => {
     store.setState({ style: "display: none; color: green;" });
     expect(div.style.display).toBe("none");
     expect(div.style.color).toBe("green");
+
+    unmount();
+  });
+
+  test("binds grouped props and cleans removed keys", () => {
+    const store = createStore(() => ({
+      props: {
+        disabled: true,
+        title: "Initial",
+        class: { active: true, stale: true },
+        style: { color: "red", backgroundColor: "white" },
+        dataset: { "user-id": "123", gone: true },
+        aria: { busy: true, label: "Save" },
+        attributes: { "data-extra": 7 },
+        textContent: "Loading",
+      },
+    }));
+
+    const unmount = mount(
+      "#app",
+      jsx("button", {
+        class: "static",
+        use: bind.props(store, (state) => state.props),
+      }),
+    );
+
+    const button = document.querySelector("button") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe("Initial");
+    expect(button.classList.contains("static")).toBe(true);
+    expect(button.classList.contains("active")).toBe(true);
+    expect(button.classList.contains("stale")).toBe(true);
+    expect(button.style.color).toBe("red");
+    expect(button.style.backgroundColor).toBe("white");
+    expect(button.getAttribute("data-user-id")).toBe("123");
+    expect(button.getAttribute("data-gone")).toBe("true");
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.getAttribute("aria-label")).toBe("Save");
+    expect(button.getAttribute("data-extra")).toBe("7");
+    expect(button.textContent).toBe("Loading");
+
+    store.setState({
+      props: {
+        disabled: false,
+        className: ["selected"],
+        style: { color: "blue", backgroundColor: null },
+        dataset: { "user-id": null },
+        aria: { busy: false },
+        attributes: { "data-extra": null, "data-next": "ok" },
+        textContent: "Ready",
+      },
+    });
+
+    expect(button.disabled).toBe(false);
+    expect(button.title).toBe("");
+    expect(button.classList.contains("static")).toBe(true);
+    expect(button.classList.contains("active")).toBe(false);
+    expect(button.classList.contains("stale")).toBe(false);
+    expect(button.classList.contains("selected")).toBe(true);
+    expect(button.style.color).toBe("blue");
+    expect(button.style.backgroundColor).toBe("");
+    expect(button.hasAttribute("data-user-id")).toBe(false);
+    expect(button.hasAttribute("data-gone")).toBe(false);
+    expect(button.hasAttribute("aria-busy")).toBe(false);
+    expect(button.hasAttribute("aria-label")).toBe(false);
+    expect(button.hasAttribute("data-extra")).toBe(false);
+    expect(button.getAttribute("data-next")).toBe("ok");
+    expect(button.textContent).toBe("Ready");
+
+    unmount();
+    store.setState({ props: { disabled: true, textContent: "After cleanup" } });
+
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toBe("Ready");
+  });
+
+  test("binds grouped string styles and fallback attributes", () => {
+    const store = createStore(() => ({
+      props: {
+        style: "display: none; color: red;",
+        custom: "yes",
+        "stroke-width": 2,
+      } satisfies PropsBinding,
+    }));
+
+    const unmount = mount(
+      "#app",
+      jsx("div", {
+        use: bind.props(store, (state) => state.props),
+      }),
+    );
+
+    const div = document.querySelector("div") as HTMLDivElement;
+    expect(div.style.display).toBe("none");
+    expect(div.style.color).toBe("red");
+    expect(div.getAttribute("custom")).toBe("yes");
+    expect(div.getAttribute("stroke-width")).toBe("2");
+
+    store.setState({
+      props: {
+        style: { color: "blue" },
+        "stroke-width": null,
+      },
+    });
+
+    expect(div.style.display).toBe("");
+    expect(div.style.color).toBe("blue");
+    expect(div.hasAttribute("custom")).toBe(false);
+    expect(div.hasAttribute("stroke-width")).toBe(false);
 
     unmount();
   });
@@ -440,6 +549,41 @@ describe("bind helpers", () => {
     expect(() =>
       store.setState({ style: { backgroundImage: "url(javascript:alert(1))" } }),
     ).toThrow("unsafe CSS");
+
+    unmount();
+  });
+
+  test("blocks unsafe grouped props", () => {
+    const store = createStore(() => ({
+      props: {
+        href: "https://example.test",
+        style: { color: "green" },
+      } satisfies PropsBinding,
+    }));
+
+    const unmount = mount(
+      "#app",
+      jsx("a", {
+        use: bind.props(store, (state) => state.props),
+        children: "Safe",
+      }),
+    );
+
+    const link = document.querySelector("a") as HTMLAnchorElement;
+    expect(link.href).toBe("https://example.test/");
+    expect(link.style.color).toBe("green");
+
+    expect(() => store.setState({ props: { href: "javascript:alert(1)" } })).toThrow(
+      "disallowed scheme",
+    );
+    expect(() =>
+      store.setState({
+        props: { style: { backgroundImage: "url(javascript:alert(1))" } },
+      }),
+    ).toThrow("unsafe CSS");
+    expect(() => store.setState({ props: { onclick: "alert(1)" } })).toThrow(
+      "Event handler attributes",
+    );
 
     unmount();
   });

@@ -22,6 +22,17 @@ export interface WritableStore<T> extends ReadableStore<T> {
 export type Selector<TState, TValue> = (state: TState) => TValue;
 export type StyleBinding = string | Record<string, string | number | null | undefined>;
 export type ClassBinding = string | readonly string[] | Record<string, boolean | null | undefined>;
+export type AttributeBinding = Record<string, unknown>;
+export type NamedValueBinding = Record<string, string | number | boolean | null | undefined>;
+export type PropsBinding = AttributeBinding & {
+  class?: ClassBinding | false | null | undefined;
+  className?: ClassBinding | false | null | undefined;
+  style?: StyleBinding | null | undefined;
+  dataset?: NamedValueBinding | null | undefined;
+  aria?: NamedValueBinding | null | undefined;
+  attributes?: AttributeBinding | null | undefined;
+  textContent?: string | number | boolean | null | undefined;
+};
 export type StoreState<TStore> = TStore extends ReadableStore<infer TState> ? TState : never;
 export type StoreStates<TStores extends readonly ReadableStore<unknown>[]> = {
   [K in keyof TStores]: StoreState<TStores[K]>;
@@ -485,6 +496,11 @@ function classSet(value: ClassBinding): Set<string> {
   );
 }
 
+function boundClassSet(value: PropsBinding["class"]): Set<string> {
+  if (value === false || value === null || value === undefined) return new Set();
+  return classSet(value);
+}
+
 function setDatasetValue(
   element: HTMLElement,
   name: string,
@@ -511,6 +527,177 @@ function setAriaValue(
   const attr = name.startsWith("aria-") ? name : `aria-${name}`;
   if (value === null || value === undefined || value === false) element.removeAttribute(attr);
   else element.setAttribute(attr, String(value));
+}
+
+function isSvgElement(element: Element): boolean {
+  return typeof SVGElement !== "undefined" && element instanceof SVGElement;
+}
+
+function clearPropertyValue(element: Element, name: string): void {
+  const target = element as unknown as Record<string, unknown>;
+  if (name in target && !isSvgElement(element)) {
+    const current = target[name];
+    target[name] = typeof current === "boolean" ? false : typeof current === "number" ? 0 : "";
+  }
+  element.removeAttribute(name === "className" ? "class" : name);
+}
+
+function setPropertyValue(element: Element, name: string, value: unknown): void {
+  if (name.toLowerCase().startsWith("on")) {
+    validateAttributeValue(element, name, "");
+  }
+
+  if (value === null || value === undefined || value === false) {
+    clearPropertyValue(element, name);
+    return;
+  }
+
+  const target = element as unknown as Record<string, unknown>;
+  if (name in target && !isSvgElement(element)) {
+    if (typeof value === "string") validateAttributeValue(element, name, value);
+    target[name] = value;
+    return;
+  }
+
+  setAttributeValue(element, name, value);
+}
+
+function applyClassBinding(
+  element: Element,
+  previous: Set<string>,
+  value: PropsBinding["class"],
+): Set<string> {
+  const next = boundClassSet(value);
+  for (const name of previous) {
+    if (!next.has(name)) element.classList.remove(name);
+  }
+  for (const name of next) element.classList.add(name);
+  return next;
+}
+
+function createStyleBinding(
+  element: HTMLElement | SVGElement,
+): (value: StyleBinding | null | undefined) => void {
+  let previous = new Set<string>();
+  let previousWasString = false;
+
+  return (value) => {
+    if (value === null || value === undefined) {
+      if (previousWasString) element.style.cssText = "";
+      else for (const name of previous) element.style.removeProperty(name);
+      previous = new Set();
+      previousWasString = false;
+      return;
+    }
+
+    if (typeof value === "string") {
+      assertSafeCssValue(value);
+      element.style.cssText = value;
+      previous = new Set();
+      previousWasString = true;
+      return;
+    }
+
+    if (previousWasString) {
+      element.style.cssText = "";
+      previousWasString = false;
+    }
+
+    const next = new Set<string>();
+    for (const [rawName, rawValue] of Object.entries(value)) {
+      const name = cssName(rawName);
+      next.add(name);
+      if (rawValue === null || rawValue === undefined) {
+        element.style.removeProperty(name);
+      } else {
+        const nextValue = typeof rawValue === "number" ? String(rawValue) : rawValue;
+        assertSafeCssValue(nextValue, name);
+        element.style.setProperty(name, nextValue);
+      }
+    }
+    for (const name of previous) {
+      if (!next.has(name)) element.style.removeProperty(name);
+    }
+    previous = next;
+  };
+}
+
+function recordEntries(value: Record<string, unknown> | null | undefined): [string, unknown][] {
+  return value && typeof value === "object" ? Object.entries(value) : [];
+}
+
+function syncNamedValues<TValue>(
+  previous: Set<string>,
+  value: Record<string, TValue> | null | undefined,
+  set: (name: string, value: TValue | null) => void,
+): Set<string> {
+  const next = new Set<string>();
+  for (const [name, item] of recordEntries(value as Record<string, unknown> | null | undefined)) {
+    next.add(name);
+    set(name, item as TValue);
+  }
+  for (const name of previous) {
+    if (!next.has(name)) set(name, null);
+  }
+  return next;
+}
+
+function createPropsBinding(element: Element): (value: PropsBinding) => void {
+  let previousClasses = new Set<string>();
+  let previousDataset = new Set<string>();
+  let previousAria = new Set<string>();
+  let previousAttributes = new Set<string>();
+  let previousProperties = new Set<string>();
+  const syncStyle = createStyleBinding(element as HTMLElement | SVGElement);
+
+  return (value) => {
+    previousClasses = applyClassBinding(
+      element,
+      previousClasses,
+      value.className === undefined ? value.class : value.className,
+    );
+    syncStyle(value.style);
+
+    previousDataset = syncNamedValues(previousDataset, value.dataset, (name, item) =>
+      setDatasetValue(element as HTMLElement, name, item),
+    );
+    previousAria = syncNamedValues(previousAria, value.aria, (name, item) =>
+      setAriaValue(element, name, item),
+    );
+    previousAttributes = syncNamedValues(previousAttributes, value.attributes, (name, item) =>
+      setAttributeValue(element, name, item),
+    );
+
+    const seenProperties = new Set<string>();
+    for (const [name, item] of Object.entries(value)) {
+      if (
+        name === "aria" ||
+        name === "attributes" ||
+        name === "class" ||
+        name === "className" ||
+        name === "dataset" ||
+        name === "style"
+      ) {
+        continue;
+      }
+
+      seenProperties.add(name);
+      if (name === "textContent") {
+        const text = item as PropsBinding["textContent"];
+        element.textContent =
+          text === null || text === undefined || text === false ? "" : String(text);
+      } else {
+        setPropertyValue(element, name, item);
+      }
+    }
+
+    for (const name of previousProperties) {
+      if (seenProperties.has(name)) continue;
+      if (name === "textContent") element.textContent = "";
+      else clearPropertyValue(element, name);
+    }
+    previousProperties = seenProperties;
+  };
 }
 
 export const bind = {
@@ -630,6 +817,18 @@ export const bind = {
       const sync = (value: TValue) => {
         (element as unknown as Record<string, unknown>)[name] = value;
       };
+      sync(selector(store.getState()));
+      return subscribeSelector(store, selector, sync, equality);
+    };
+  },
+
+  props<TState, TValue extends PropsBinding, TElement extends Element = Element>(
+    store: ReadableStore<TState>,
+    selector: Selector<TState, TValue>,
+    equality?: Equality<TValue>,
+  ): Action<TElement> {
+    return (element) => {
+      const sync = createPropsBinding(element);
       sync(selector(store.getState()));
       return subscribeSelector(store, selector, sync, equality);
     };
