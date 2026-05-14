@@ -5,6 +5,7 @@ import {
   createAuth,
   createLocalCache,
   createResource,
+  derivedStore,
   readCsrfToken,
   safeErrorMessage,
   type SecurityViolation,
@@ -215,11 +216,7 @@ export function readPostsVm(): PostsVm {
   };
 }
 
-export const postsVm = createStore<PostsVm>(() => readPostsVm());
-export const syncPostsVm = () => postsVm.setState(readPostsVm(), true);
-
-posts.store.subscribe(syncPostsVm);
-preferences.subscribe(syncPostsVm);
+export const postsVm = derivedStore([posts.store, preferences], readPostsVm);
 
 export const cacheInspector = createStore<{ version: number }>(() => ({ version: 0 }));
 export const refreshCacheInspector = () =>

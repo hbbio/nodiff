@@ -2,7 +2,7 @@
 
 A tiny TypeScript framework for rich-client apps that treats TSX as browser syntax. This repo (which was built with LLM assistance) is a work-in-progress!
 
-In the LLM era, you do not need a fat web framework for every browser app, especially when your project grows. You often want a lean runtime that lives in the same monorepo as your app and evolves with it. 
+In the LLM era, you do not need a fat web framework for every browser app, especially when your project grows. You often want a lean runtime that lives in the same monorepo as your app and evolves with it.
 
 That shape is easier for people and coding agents to integrate, inspect, change, and reason about. Fewer hidden layers means fewer bugs, faster feedback, and less time spent reverse-engineering framework behavior.
 
@@ -686,9 +686,19 @@ list(store, selector, render, options?);
 For({ store, each, by, children, fallback?, equality? });
 ResourceView({ resource, children, pending?, error?, empty?, equality? });
 Await({ resource, children, pending?, error?, empty?, equality? });
+derivedStore(stores, derive, options?);
 effect(store, selector, run, equality?);
 subscribeSelector(store, selector, listener, equality?);
 ```
+
+Use `derivedStore` when UI state depends on multiple explicit stores:
+
+```ts
+const postsVm = derivedStore([posts.store, preferences], () => readPostsVm());
+```
+
+It is a read-only store. Dependencies stay visible in the call site; there is no hidden dependency
+tracking.
 
 `bind` helpers:
 

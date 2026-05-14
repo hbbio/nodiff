@@ -22,6 +22,10 @@ export interface WritableStore<T> extends ReadableStore<T> {
 export type Selector<TState, TValue> = (state: TState) => TValue;
 export type StyleBinding = string | Record<string, string | number | null | undefined>;
 export type ClassBinding = string | readonly string[] | Record<string, boolean | null | undefined>;
+export type StoreState<TStore> = TStore extends ReadableStore<infer TState> ? TState : never;
+export type StoreStates<TStores extends readonly ReadableStore<unknown>[]> = {
+  [K in keyof TStores]: StoreState<TStores[K]>;
+};
 
 export function subscribeSelector<TState, TValue>(
   store: ReadableStore<TState>,
@@ -38,6 +42,63 @@ export function subscribeSelector<TState, TValue>(
     current = next;
     listener(next, previous, state, previousState);
   });
+}
+
+function readStoreStates<TStores extends readonly ReadableStore<unknown>[]>(
+  stores: TStores,
+): StoreStates<TStores> {
+  return stores.map((store) => store.getState()) as StoreStates<TStores>;
+}
+
+export function derivedStore<const TStores extends readonly ReadableStore<unknown>[], TValue>(
+  stores: TStores,
+  derive: (...states: StoreStates<TStores>) => TValue,
+  options: { equality?: Equality<TValue> } = {},
+): ReadableStore<TValue> {
+  const equality = options.equality ?? Object.is;
+  const listeners = new Set<(state: TValue, previousState: TValue) => void>();
+  let current = derive(...readStoreStates(stores));
+  let unsubscribes: Array<() => void> = [];
+
+  const recompute = (notify: boolean): TValue => {
+    const next = derive(...readStoreStates(stores));
+    if (equality(current, next)) return current;
+
+    const previous = current;
+    current = next;
+
+    if (notify) {
+      for (const listener of listeners) listener(current, previous);
+    }
+
+    return current;
+  };
+
+  const start = () => {
+    if (unsubscribes.length > 0) return;
+    recompute(false);
+    unsubscribes = stores.map((store) => store.subscribe(() => recompute(true)));
+  };
+
+  const stop = () => {
+    if (listeners.size > 0) return;
+    for (const unsubscribe of unsubscribes) unsubscribe();
+    unsubscribes = [];
+  };
+
+  return {
+    getState() {
+      return recompute(false);
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      start();
+      return () => {
+        listeners.delete(listener);
+        stop();
+      };
+    },
+  };
 }
 
 export function effect<TState, TValue>(
