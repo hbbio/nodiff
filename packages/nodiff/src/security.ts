@@ -34,6 +34,16 @@ export type SecurityPolicyOptions = {
   onViolation?: (violation: SecurityViolation) => void;
 };
 
+export type SecurityHeadersOptions = {
+  policy?: SecurityPolicy | SecurityPolicyOptions;
+  connectSrc?: readonly string[];
+  imgSrc?: readonly string[];
+  frameAncestors?: readonly string[];
+  formAction?: readonly string[];
+  reportUri?: string;
+  hsts?: boolean | { maxAge?: number; includeSubDomains?: boolean; preload?: boolean };
+};
+
 const DEFAULT_SCHEMES = ["http:", "https:", "mailto:", "tel:"] as const;
 
 function currentOrigin(): string {
@@ -49,6 +59,18 @@ function normalizeScheme(scheme: string): string {
 function normalizeOrigin(origin: string): string {
   if (origin === "self") return currentOrigin();
   return new URL(origin, currentOrigin()).origin;
+}
+
+function normalizeCspSource(source: string): string {
+  if (/[\r\n;]/.test(source)) {
+    throw new SecurityViolationError({
+      type: "unsafe-config",
+      message: `Invalid CSP source: ${source}`,
+      value: source,
+    });
+  }
+  if (source.startsWith("'") || source.endsWith(":")) return source;
+  return normalizeOrigin(source);
 }
 
 export class SecurityViolationError extends Error {
@@ -87,6 +109,11 @@ export class SecurityPolicy {
 
   isStrict(): boolean {
     return this.mode === "strict";
+  }
+
+  cspOriginSources(): string[] {
+    const sources = this.allowedOrigins ? Array.from(this.allowedOrigins) : [currentOrigin()];
+    return sources.map((origin) => (origin === currentOrigin() ? "'self'" : origin));
   }
 
   report(violation: SecurityViolation): SecurityViolationError {
@@ -155,4 +182,72 @@ export function resolveSecurityPolicy(
 ): SecurityPolicy {
   if (!options) return getSecurityPolicy();
   return options instanceof SecurityPolicy ? options : new SecurityPolicy(options);
+}
+
+function unique(values: readonly string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function directive(name: string, values: readonly string[]): string {
+  return `${name} ${unique(values).join(" ")}`;
+}
+
+export function contentSecurityPolicy(options: SecurityHeadersOptions = {}): string {
+  const policy = resolveSecurityPolicy(options.policy);
+  const connectSrc = unique([
+    "'self'",
+    ...policy.cspOriginSources(),
+    ...(options.connectSrc ?? []).map(normalizeCspSource),
+  ]);
+  const imgSrc = unique([
+    "'self'",
+    "data:",
+    "blob:",
+    ...(options.imgSrc ?? []).map(normalizeCspSource),
+  ]);
+  const frameAncestors = unique((options.frameAncestors ?? ["'self'"]).map(normalizeCspSource));
+  const formAction = unique((options.formAction ?? ["'self'"]).map(normalizeCspSource));
+
+  const directives = [
+    directive("default-src", ["'none'"]),
+    directive("base-uri", ["'none'"]),
+    directive("object-src", ["'none'"]),
+    directive("script-src", ["'self'"]),
+    directive("style-src", ["'self'"]),
+    directive("connect-src", connectSrc),
+    directive("img-src", imgSrc),
+    directive("font-src", ["'self'"]),
+    directive("frame-ancestors", frameAncestors),
+    directive("form-action", formAction),
+  ];
+
+  if (policy.enforceHttps) directives.push("upgrade-insecure-requests");
+  if (options.reportUri)
+    directives.push(directive("report-uri", [normalizeCspSource(options.reportUri)]));
+  return directives.join("; ");
+}
+
+function hstsHeader(
+  option: true | { maxAge?: number; includeSubDomains?: boolean; preload?: boolean },
+): string {
+  if (option === true) return "max-age=31536000; includeSubDomains";
+  const maxAge = option.maxAge ?? 31_536_000;
+  const parts = [`max-age=${maxAge}`];
+  if (option.includeSubDomains ?? true) parts.push("includeSubDomains");
+  if (option.preload) parts.push("preload");
+  return parts.join("; ");
+}
+
+export function securityHeaders(options: SecurityHeadersOptions = {}): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Security-Policy": contentSecurityPolicy(options),
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+  };
+
+  if (options.hsts) headers["Strict-Transport-Security"] = hstsHeader(options.hsts);
+  return headers;
 }

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   configureSecurityPolicy,
+  contentSecurityPolicy,
   createSecurityPolicy,
   getSecurityPolicy,
+  securityHeaders,
   SecurityViolationError,
   type SecurityViolation,
 } from "../src/security";
@@ -65,5 +67,33 @@ describe("SecurityPolicy", () => {
     expect(getSecurityPolicy()).toBe(policy);
     expect(getSecurityPolicy().isOriginAllowed("https://api.example.test/users")).toBe(true);
     expect(getSecurityPolicy().isOriginAllowed("https://other.example.test/users")).toBe(false);
+  });
+
+  test("generates CSP and security headers from policy origins", () => {
+    const policy = createSecurityPolicy({
+      mode: "strict",
+      allowedOrigins: ["self", "https://api.example.test"],
+      enforceHttps: true,
+    });
+
+    const csp = contentSecurityPolicy({ policy });
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("connect-src 'self' https://api.example.test");
+    expect(csp).toContain("frame-ancestors 'self'");
+    expect(csp).toContain("upgrade-insecure-requests");
+
+    const headers = securityHeaders({ policy, hsts: true });
+    expect(headers["Content-Security-Policy"]).toBe(csp);
+    expect(headers["X-Content-Type-Options"]).toBe("nosniff");
+    expect(headers["Strict-Transport-Security"]).toContain("max-age=");
+  });
+
+  test("rejects invalid CSP source input", () => {
+    expect(() =>
+      contentSecurityPolicy({
+        connectSrc: ["https://api.example.test; script-src *"],
+      }),
+    ).toThrow(SecurityViolationError);
   });
 });
