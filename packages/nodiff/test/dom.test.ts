@@ -204,7 +204,6 @@ describe("DOM runtime", () => {
     const unmount = mount("#app", [
       jsx("button", {
         class: ["primary", "", "wide"],
-        className: { active: true, hidden: false },
         style: { color: "red", backgroundColor: null },
         dataset: { id: "save", gone: false },
         aria: { label: "Save", hidden: false },
@@ -235,6 +234,7 @@ describe("DOM runtime", () => {
         }),
       }),
       jsx("div", { class: 7 as unknown as string }),
+      jsx("div", { className: { active: true, hidden: false } }),
       jsx("div", { className: false }),
       jsx("div", { tagName: "section" }),
     ]);
@@ -242,7 +242,7 @@ describe("DOM runtime", () => {
     const button = document.querySelector("button") as HTMLButtonElement;
     const input = document.querySelector("input") as HTMLInputElement;
 
-    expect(button.className).toBe("active");
+    expect(button.className).toBe("primary wide");
     expect(button.style.color).toBe("red");
     expect(button.dataset.id).toBe("save");
     expect(button.dataset.gone).toBeUndefined();
@@ -261,7 +261,8 @@ describe("DOM runtime", () => {
     expect(objectRef.current).toBe(input);
     expect(input.value).toBe("42");
     expect(document.querySelectorAll("div")[0]?.className).toBe("7");
-    expect(document.querySelectorAll("div")[2]?.getAttribute("tagName")).toBe("section");
+    expect(document.querySelectorAll("div")[1]?.className).toBe("active");
+    expect(document.querySelectorAll("div")[3]?.getAttribute("tagName")).toBe("section");
 
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));

@@ -64,7 +64,7 @@ describe("forms", () => {
       jsx("form", {
         use: zodSubmit(
           z.object({
-            email: z.string().email(),
+            email: z.string().email("Use a valid email address."),
             tag: z.array(z.string()),
           }),
           () => {
@@ -96,12 +96,12 @@ describe("forms", () => {
 
     expect(submitted).toBe(false);
     expect(errors).toBe(1);
-    expect((form.elements.namedItem("email") as HTMLInputElement).validationMessage).toContain(
-      "email",
-    );
+    const email = form.elements.namedItem("email") as HTMLInputElement;
+    expect(email.validationMessage).toBe("Use a valid email address.");
 
     const rootResult = z.string().safeParse(1);
     if (!rootResult.success) applyZodValidity(form, rootResult.error);
+    expect(email.validationMessage).toBe("");
 
     unmount();
   });
