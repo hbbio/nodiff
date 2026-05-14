@@ -23,8 +23,13 @@ export type CacheWriteOptions = {
   tags?: string[];
 };
 
-function canUseLocalStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+function getLocalStorage(): Storage | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
 }
 
 export class LocalCache {
@@ -39,8 +44,15 @@ export class LocalCache {
     schema?: CacheSchema<T>,
     options: CacheReadOptions = {},
   ): CacheEntry<T> | undefined {
-    if (!canUseLocalStorage()) return undefined;
-    const raw = window.localStorage.getItem(this.fullKey(key));
+    const storage = getLocalStorage();
+    if (!storage) return undefined;
+
+    let raw: string | null;
+    try {
+      raw = storage.getItem(this.fullKey(key));
+    } catch {
+      return undefined;
+    }
     if (!raw) return undefined;
 
     try {
@@ -80,27 +92,43 @@ export class LocalCache {
   }
 
   set<T>(key: string, value: T, options: CacheWriteOptions = {}): void {
-    if (!canUseLocalStorage()) return;
-    const envelope: CacheEnvelope<T> = {
-      value,
-      updatedAt: Date.now(),
-      expiresAt: typeof options.ttl === "number" ? Date.now() + options.ttl : null,
-      tags: options.tags ?? [],
-    };
-    window.localStorage.setItem(this.fullKey(key), JSON.stringify(envelope));
+    const storage = getLocalStorage();
+    if (!storage) return;
+
+    try {
+      const envelope: CacheEnvelope<T> = {
+        value,
+        updatedAt: Date.now(),
+        expiresAt: typeof options.ttl === "number" ? Date.now() + options.ttl : null,
+        tags: options.tags ?? [],
+      };
+      storage.setItem(this.fullKey(key), JSON.stringify(envelope));
+    } catch {
+      // localStorage is a best-effort cache; quota/security/serialization failures are misses.
+    }
   }
 
   remove(key: string): void {
-    if (!canUseLocalStorage()) return;
-    window.localStorage.removeItem(this.fullKey(key));
+    const storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.removeItem(this.fullKey(key));
+    } catch {
+      // Best-effort cache cleanup.
+    }
   }
 
   keys(): string[] {
-    if (!canUseLocalStorage()) return [];
+    const storage = getLocalStorage();
+    if (!storage) return [];
     const keys: string[] = [];
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-      const key = window.localStorage.key(index);
-      if (key?.startsWith(this.prefix)) keys.push(key.slice(this.prefix.length));
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key?.startsWith(this.prefix)) keys.push(key.slice(this.prefix.length));
+      }
+    } catch {
+      return [];
     }
     return keys;
   }
