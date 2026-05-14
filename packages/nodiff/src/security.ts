@@ -37,7 +37,8 @@ export type SecurityPolicyOptions = {
 const DEFAULT_SCHEMES = ["http:", "https:", "mailto:", "tel:"] as const;
 
 function currentOrigin(): string {
-  if (typeof window !== "undefined") return window.location.origin;
+  if (typeof window !== "undefined" && window.location.origin !== "null")
+    return window.location.origin;
   return "http://localhost";
 }
 

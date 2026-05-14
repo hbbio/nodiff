@@ -1,5 +1,11 @@
 import { addCleanup, clearBetween, removeNode } from "./lifecycle";
-import { type Action, type Child, toNodes } from "./dom";
+import {
+  assertSafeCssValue,
+  type Action,
+  type Child,
+  toNodes,
+  validateAttributeValue,
+} from "./dom";
 import type { ResourceState } from "./resource";
 
 export type Equality<T> = (a: T, b: T) => boolean;
@@ -376,21 +382,30 @@ function setAttributeValue(element: Element, name: string, value: unknown): void
     return;
   }
   if (typeof value === "string") {
+    validateAttributeValue(element, name, value);
     element.setAttribute(name, value);
     return;
   }
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "symbol") {
-    element.setAttribute(name, String(value));
+    const next = String(value);
+    validateAttributeValue(element, name, next);
+    element.setAttribute(name, next);
     return;
   }
   if (value instanceof Date) {
-    element.setAttribute(name, value.toISOString());
+    const next = value.toISOString();
+    validateAttributeValue(element, name, next);
+    element.setAttribute(name, next);
     return;
   }
   try {
-    element.setAttribute(name, JSON.stringify(value) ?? Object.prototype.toString.call(value));
+    const next = JSON.stringify(value) ?? Object.prototype.toString.call(value);
+    validateAttributeValue(element, name, next);
+    element.setAttribute(name, next);
   } catch {
-    element.setAttribute(name, Object.prototype.toString.call(value));
+    const next = Object.prototype.toString.call(value);
+    validateAttributeValue(element, name, next);
+    element.setAttribute(name, next);
   }
 }
 
@@ -509,6 +524,7 @@ export const bind = {
       let previousWasString = false;
       const sync = (value: StyleBinding) => {
         if (typeof value === "string") {
+          assertSafeCssValue(value);
           element.style.cssText = value;
           previous = new Set();
           previousWasString = true;
@@ -527,10 +543,9 @@ export const bind = {
           if (rawValue === null || rawValue === undefined) {
             element.style.removeProperty(name);
           } else {
-            element.style.setProperty(
-              name,
-              typeof rawValue === "number" ? String(rawValue) : rawValue,
-            );
+            const next = typeof rawValue === "number" ? String(rawValue) : rawValue;
+            assertSafeCssValue(next, name);
+            element.style.setProperty(name, next);
           }
         }
         for (const name of previous) {

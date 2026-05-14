@@ -1,4 +1,5 @@
 import { addCleanup, cleanupNode, replaceChildrenClean } from "./lifecycle";
+import { getSecurityPolicy } from "./security";
 
 export type PrimitiveChild = string | number | bigint | boolean | null | undefined;
 export type Child = PrimitiveChild | Node | Child[] | Iterable<Child>;
@@ -7,6 +8,12 @@ export type Ref<T extends Node = Node> = ((node: T) => void) | { current: T | nu
 export type Action<T extends Element = Element> = (element: T) => void | (() => void);
 
 type EventPair = [EventListenerOrEventListenerObject, AddEventListenerOptions?];
+const trustedHTMLMarker = Symbol("nodiff:trustedHTML");
+
+export type TrustedHTML = {
+  readonly [trustedHTMLMarker]: true;
+  readonly html: string;
+};
 
 export type StyleValue =
   | string
@@ -29,7 +36,7 @@ export type ElementProps<T extends Element = Element> = {
   key?: unknown;
   dataset?: Record<string, string | number | boolean | null | undefined>;
   aria?: Record<string, string | number | boolean | null | undefined>;
-  unsafeHTML?: string;
+  unsafeHTML?: TrustedHTML;
   textContent?: string | number | null | undefined;
   onClick?: (event: MouseEvent & { currentTarget: T }) => void;
   onInput?: (event: InputEvent & { currentTarget: T }) => void;
@@ -97,6 +104,18 @@ const svgTags = new Set([
   "use",
 ]);
 
+const blockedElementTags = new Set(["script", "iframe", "object", "embed"]);
+const rawHtmlSanitizerBlockedTags = new Set([...blockedElementTags, "link", "meta"]);
+const urlAttributes = new Set([
+  "href",
+  "src",
+  "action",
+  "formaction",
+  "poster",
+  "cite",
+  "xlink:href",
+]);
+
 function isIterable(value: unknown): value is Iterable<Child> {
   return typeof value === "object" && value !== null && Symbol.iterator in value;
 }
@@ -145,8 +164,94 @@ function domString(value: unknown): string {
   }
 }
 
+function reportDomViolation(message: string, value?: string): never {
+  const violation = {
+    type: "blocked-dom",
+    message,
+  } as const;
+  throw getSecurityPolicy().report(value === undefined ? violation : { ...violation, value });
+}
+
+function isTrustedHTML(value: unknown): value is TrustedHTML {
+  return typeof value === "object" && value !== null && trustedHTMLMarker in value;
+}
+
+export function trustedHTML(html: string): TrustedHTML {
+  return Object.freeze({ [trustedHTMLMarker]: true, html } satisfies TrustedHTML);
+}
+
+export function assertSafeCssValue(value: string, context = "style"): void {
+  if (/(?:url\s*\(|expression\s*\()/i.test(value)) {
+    reportDomViolation(`Blocked unsafe CSS value in ${context}.`, value);
+  }
+}
+
+function isHttpUrl(url: URL): boolean {
+  return url.protocol === "http:" || url.protocol === "https:";
+}
+
+function safeUrlAttributeValue(element: Element, name: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("#")) return value;
+
+  const policy = getSecurityPolicy();
+  const context = `${element.tagName.toLowerCase()}.${name}`;
+  const url = policy.assertSafeUrl(trimmed, context);
+  if (policy.isStrict() && isHttpUrl(url)) policy.assertAllowedOrigin(url, context);
+  return value;
+}
+
+export function validateAttributeValue(element: Element, name: string, value: string): void {
+  const normalized = name.toLowerCase();
+  if (normalized.startsWith("on")) {
+    reportDomViolation(`Event handler attributes are not supported: ${name}.`, value);
+  }
+  if (normalized === "style") assertSafeCssValue(value, "style attribute");
+  if (urlAttributes.has(normalized)) safeUrlAttributeValue(element, normalized, value);
+}
+
+function assertSafeElementType(type: string): void {
+  const normalized = type.toLowerCase();
+  if (blockedElementTags.has(normalized)) {
+    reportDomViolation(`The <${normalized}> element is not supported by the JSX runtime.`);
+  }
+}
+
+function enforceAnchorRel(element: Element): void {
+  if (!(element instanceof HTMLAnchorElement)) return;
+  if (element.target !== "_blank") return;
+
+  const rel = new Set(element.rel.split(/\s+/).filter(Boolean));
+  rel.add("noopener");
+  rel.add("noreferrer");
+  element.rel = Array.from(rel).join(" ");
+}
+
+export function sanitizeHTML(html: string): TrustedHTML {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  for (const element of Array.from(template.content.querySelectorAll("*"))) {
+    if (rawHtmlSanitizerBlockedTags.has(element.tagName.toLowerCase())) {
+      element.remove();
+      continue;
+    }
+
+    for (const attribute of Array.from(element.attributes)) {
+      try {
+        validateAttributeValue(element, attribute.name, attribute.value);
+      } catch {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+
+  return trustedHTML(template.innerHTML);
+}
+
 function setStyle(element: Element, value: StyleValue): void {
   if (typeof value === "string") {
+    assertSafeCssValue(value);
     (element as HTMLElement).style.cssText = value;
     return;
   }
@@ -164,7 +269,9 @@ function setStyle(element: Element, value: StyleValue): void {
     const cssName = key.includes("-")
       ? key
       : key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
-    style.setProperty(cssName, typeof raw === "number" ? String(raw) : raw);
+    const next = typeof raw === "number" ? String(raw) : raw;
+    assertSafeCssValue(next, cssName);
+    style.setProperty(cssName, next);
   }
 }
 
@@ -264,7 +371,10 @@ function applyProp(element: Element, name: string, value: unknown): void {
   }
 
   if (name === "unsafeHTML") {
-    element.innerHTML = domString(value);
+    if (!isTrustedHTML(value)) {
+      throw new Error("The unsafeHTML prop requires trustedHTML(...) or sanitizeHTML(...).");
+    }
+    element.innerHTML = value.html;
     return;
   }
 
@@ -287,10 +397,13 @@ function applyProp(element: Element, name: string, value: unknown): void {
       addCleanup(element, () => element.removeEventListener(eventName, listener, options));
       return;
     }
+    throw new Error(`Event prop ${name} must be a function or [function, options] pair.`);
   }
 
   if (name.startsWith("aria-") || name.startsWith("data-")) {
-    element.setAttribute(name, domString(value));
+    const next = domString(value);
+    validateAttributeValue(element, name, next);
+    element.setAttribute(name, next);
     return;
   }
 
@@ -302,15 +415,20 @@ function applyProp(element: Element, name: string, value: unknown): void {
   const target = element as unknown as Record<string, unknown>;
   if (name in target && !(element instanceof SVGElement)) {
     try {
+      if (typeof value === "string") validateAttributeValue(element, name, value);
       target[name] = value;
       return;
     } catch {
-      element.setAttribute(name, domString(value));
+      const next = domString(value);
+      validateAttributeValue(element, name, next);
+      element.setAttribute(name, next);
       return;
     }
   }
 
-  element.setAttribute(name, domString(value));
+  const next = domString(value);
+  validateAttributeValue(element, name, next);
+  element.setAttribute(name, next);
 }
 
 export function toNodes(value: Child): Node[] {
@@ -340,6 +458,8 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
     return type({ ...props });
   }
 
+  assertSafeElementType(type);
+
   const element = svgTags.has(type)
     ? document.createElementNS("http://www.w3.org/2000/svg", type)
     : document.createElement(type);
@@ -361,6 +481,8 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
   if (currentProps.use !== undefined) {
     applyProp(element, "use", currentProps.use);
   }
+
+  enforceAnchorRel(element);
 
   return element;
 }

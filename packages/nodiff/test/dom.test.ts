@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
-import { jsx, mount } from "../src/dom";
+import { jsx, mount, sanitizeHTML, trustedHTML } from "../src/dom";
+import { configureSecurityPolicy } from "../src/security";
 import { text, view } from "../src/store";
 import { installDom } from "./test-dom";
 
@@ -10,9 +11,11 @@ describe("DOM runtime", () => {
   beforeEach(() => {
     cleanupDom = installDom();
     document.body.innerHTML = '<main id="app"></main>';
+    configureSecurityPolicy({});
   });
 
   afterEach(() => {
+    configureSecurityPolicy({});
     cleanupDom?.();
     cleanupDom = undefined;
   });
@@ -91,13 +94,74 @@ describe("DOM runtime", () => {
 
   test("requires explicit unsafeHTML for raw HTML injection", () => {
     const node = jsx("div", {
-      unsafeHTML: "<strong>Trusted</strong>",
+      unsafeHTML: trustedHTML("<strong>Trusted</strong>"),
       children: "Ignored",
     });
 
     expect(node).toBeInstanceOf(HTMLElement);
     expect((node as HTMLElement).innerHTML).toBe("<strong>Trusted</strong>");
     expect(() => jsx("div", { innerHTML: "<strong>nope</strong>" })).toThrow("Use unsafeHTML");
+    expect(() => jsx("div", { unsafeHTML: "<strong>nope</strong>" })).toThrow("trustedHTML");
+  });
+
+  test("sanitizes raw HTML before it reaches unsafeHTML", () => {
+    const node = jsx("div", {
+      unsafeHTML: sanitizeHTML(
+        '<strong onclick="alert(1)">Safe</strong><a href="javascript:alert(1)">bad</a><script>alert(1)</script>',
+      ),
+    }) as HTMLElement;
+
+    expect(node.querySelector("strong")?.textContent).toBe("Safe");
+    expect(node.querySelector("strong")?.hasAttribute("onclick")).toBe(false);
+    expect(node.querySelector("a")?.hasAttribute("href")).toBe(false);
+    expect(node.querySelector("script")).toBeNull();
+  });
+
+  test("blocks dangerous DOM sinks and preserves safe ones", () => {
+    const link = jsx("a", {
+      href: "https://example.test/docs",
+      target: "_blank",
+      children: "Docs",
+    }) as HTMLAnchorElement;
+
+    expect(link.href).toBe("https://example.test/docs");
+    expect(link.rel.split(/\s+/).sort()).toEqual(["noopener", "noreferrer"]);
+
+    expect(() => jsx("a", { href: "javascript:alert(1)", children: "Bad" })).toThrow(
+      "disallowed scheme",
+    );
+    expect(() => jsx("button", { onClick: "alert(1)", children: "Bad" })).toThrow(
+      "must be a function",
+    );
+    expect(() => jsx("script", { children: "alert(1)" })).toThrow("not supported");
+  });
+
+  test("blocks CSS execution sinks in static styles", () => {
+    const node = jsx("div", {
+      style: { color: "red" },
+    }) as HTMLElement;
+
+    expect(node.style.color).toBe("red");
+    expect(() => jsx("div", { style: "background: url(javascript:alert(1))" })).toThrow(
+      "unsafe CSS",
+    );
+    expect(() =>
+      jsx("div", {
+        style: { backgroundImage: "url(javascript:alert(1))" },
+      }),
+    ).toThrow("unsafe CSS");
+  });
+
+  test("applies strict origin checks to URL attributes", () => {
+    configureSecurityPolicy({
+      mode: "strict",
+      allowedOrigins: ["self"],
+    });
+
+    expect(() => jsx("a", { href: "/local", children: "Local" })).not.toThrow();
+    expect(() => jsx("img", { src: "https://cdn.example.test/image.png" })).toThrow(
+      "disallowed origin",
+    );
   });
 
   test("runs actions after children are appended", () => {

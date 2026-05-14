@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
 import { jsx, mount } from "../src/dom";
+import { configureSecurityPolicy } from "../src/security";
 import { bind, type ClassBinding, type StyleBinding } from "../src/store";
 import { installDom } from "./test-dom";
 
@@ -38,9 +39,11 @@ describe("bind helpers", () => {
   beforeEach(() => {
     cleanupDom = installDom();
     document.body.innerHTML = '<main id="app"></main>';
+    configureSecurityPolicy({});
   });
 
   afterEach(() => {
+    configureSecurityPolicy({});
     cleanupDom?.();
     cleanupDom = undefined;
   });
@@ -279,5 +282,34 @@ describe("bind helpers", () => {
     });
     input.dispatchEvent(new Event("change", { bubbles: true }));
     expect(store.getState().files).toBe(files);
+  });
+
+  test("blocks unsafe URL and CSS values in bindings", () => {
+    const store = createStore(() => ({
+      href: "https://example.test",
+      style: { color: "green" } as StyleBinding,
+    }));
+
+    const unmount = mount(
+      "#app",
+      jsx("a", {
+        use: [
+          bind.attr("href", store, (state) => state.href),
+          bind.style(store, (state) => state.style),
+        ],
+        children: "Safe",
+      }),
+    );
+
+    const link = document.querySelector("a") as HTMLAnchorElement;
+    expect(link.href).toBe("https://example.test/");
+    expect(link.style.color).toBe("green");
+
+    expect(() => store.setState({ href: "javascript:alert(1)" })).toThrow("disallowed scheme");
+    expect(() =>
+      store.setState({ style: { backgroundImage: "url(javascript:alert(1))" } }),
+    ).toThrow("unsafe CSS");
+
+    unmount();
   });
 });
