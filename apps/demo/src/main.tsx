@@ -8,7 +8,7 @@ import {
   mount,
   text,
   view,
-  zodSubmit
+  zodSubmit,
 } from "@mini-ria/core";
 import { createStore } from "zustand/vanilla";
 import { z } from "zod";
@@ -20,7 +20,7 @@ const apiCache = createLocalCache("demo:http:");
 const PreferencesSchema = z.object({
   count: z.number().int().nonnegative(),
   search: z.string(),
-  theme: z.enum(["system", "light", "dark"])
+  theme: z.enum(["system", "light", "dark"]),
 });
 
 type PreferencesData = z.infer<typeof PreferencesSchema>;
@@ -34,24 +34,25 @@ type PreferencesState = PreferencesData & {
 const defaultPreferences: PreferencesData = {
   count: 0,
   search: "",
-  theme: "system"
+  theme: "system",
 };
 
-const savedPreferences = appCache.get("preferences", PreferencesSchema, { allowStale: true })?.value ?? defaultPreferences;
+const savedPreferences =
+  appCache.get("preferences", PreferencesSchema, { allowStale: true })?.value ?? defaultPreferences;
 
 const preferences = createStore<PreferencesState>((set) => ({
   ...savedPreferences,
   increment: () => set((state) => ({ count: state.count + 1 })),
   resetCount: () => set({ count: 0 }),
   setSearch: (search) => set({ search }),
-  setTheme: (theme) => set({ theme })
+  setTheme: (theme) => set({ theme }),
 }));
 
 function preferenceSnapshot(state: PreferencesState): PreferencesData {
   return {
     count: state.count,
     search: state.search,
-    theme: state.theme
+    theme: state.theme,
   };
 }
 
@@ -68,14 +69,14 @@ const api = createApi({
   baseUrl: "https://jsonplaceholder.typicode.com",
   cache: apiCache,
   getAuthHeaders: auth.authHeaders,
-  onUnauthorized: () => auth.logout()
+  onUnauthorized: () => auth.logout(),
 });
 
 const PostSchema = z.object({
   userId: z.number(),
   id: z.number(),
   title: z.string(),
-  body: z.string()
+  body: z.string(),
 });
 const PostsSchema = z.array(PostSchema);
 type Post = z.infer<typeof PostSchema>;
@@ -90,9 +91,9 @@ const posts = createResource<Post[]>({
         key: "posts",
         ttl: 5 * 60 * 1000,
         swr: true,
-        tags: ["posts"]
-      }
-    })
+        tags: ["posts"],
+      },
+    }),
 });
 
 type PostsVm = {
@@ -122,7 +123,7 @@ function readPostsVm(): PostsVm {
     error: resource.error?.message ?? null,
     total: all.length,
     search,
-    visible
+    visible,
   };
 }
 
@@ -132,11 +133,12 @@ posts.store.subscribe(syncPostsVm);
 preferences.subscribe(syncPostsVm);
 
 const cacheInspector = createStore<{ version: number }>(() => ({ version: 0 }));
-const refreshCacheInspector = () => cacheInspector.setState((state) => ({ version: state.version + 1 }));
+const refreshCacheInspector = () =>
+  cacheInspector.setState((state) => ({ version: state.version + 1 }));
 
 const LoginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(4)
+  password: z.string().min(4),
 });
 
 type LoginValues = z.infer<typeof LoginSchema>;
@@ -146,9 +148,9 @@ async function fakeLogin(values: LoginValues): Promise<void> {
   auth.setToken(
     {
       accessToken: btoa(`${values.email}:${Date.now()}`),
-      expiresAt: Date.now() + 60 * 60 * 1000
+      expiresAt: Date.now() + 60 * 60 * 1000,
     },
-    { email: values.email, name }
+    { email: values.email, name },
   );
 }
 
@@ -169,11 +171,14 @@ function HomePage() {
         <p class="eyebrow">No React, no axios, no virtual DOM</p>
         <h1>Direct DOM TSX for rich-client apps.</h1>
         <p>
-          TSX compiles through Vite into calls to <code>@mini-ria/core/jsx-runtime</code>. Components create real DOM nodes,
-          actions attach behavior, and zustand stores drive explicit updates.
+          TSX compiles through Vite into calls to <code>@mini-ria/core/jsx-runtime</code>.
+          Components create real DOM nodes, actions attach behavior, and zustand stores drive
+          explicit updates.
         </p>
         <div class="actions">
-          <button onClick={() => preferences.getState().increment()}>Increment local counter</button>
+          <button onClick={() => preferences.getState().increment()}>
+            Increment local counter
+          </button>
           <button class="ghost" onClick={() => preferences.getState().resetCount()}>
             Reset
           </button>
@@ -181,9 +186,21 @@ function HomePage() {
       </header>
 
       <div class="grid stats">
-        <StatCard label="Counter" value={text(preferences, (state) => state.count)} hint="Persisted in localStorage" />
-        <StatCard label="Auth" value={text(auth.store, (state) => state.status)} hint="Bearer token helper" />
-        <StatCard label="Posts" value={text(postsVm, (state) => state.total)} hint="Zod-validated API data" />
+        <StatCard
+          label="Counter"
+          value={text(preferences, (state) => state.count)}
+          hint="Persisted in localStorage"
+        />
+        <StatCard
+          label="Auth"
+          value={text(auth.store, (state) => state.status)}
+          hint="Bearer token helper"
+        />
+        <StatCard
+          label="Posts"
+          value={text(postsVm, (state) => state.total)}
+          hint="Zod-validated API data"
+        />
       </div>
 
       <section class="panel stack compact">
@@ -195,7 +212,7 @@ function HomePage() {
               preferences,
               (state) => state.theme,
               (theme) => ({ theme: theme as PreferencesData["theme"] }),
-              { event: "change" }
+              { event: "change" },
             )}
           >
             <option value="system">System</option>
@@ -239,7 +256,10 @@ function PostsPage() {
           <p>Fetched from JSONPlaceholder, parsed by zod, then cached in localStorage.</p>
         </div>
         <div class="actions">
-          <button use={bind.attr("disabled", postsVm, (state) => state.loading)} onClick={() => void posts.refresh()}>
+          <button
+            use={bind.attr("disabled", postsVm, (state) => state.loading)}
+            onClick={() => void posts.refresh()}
+          >
             Refresh
           </button>
           <button
@@ -260,29 +280,43 @@ function PostsPage() {
           <span>Filter posts</span>
           <input
             placeholder="Try album, photo, dolorem..."
-            use={bind.value(preferences, (state) => state.search, (search) => ({ search }))}
+            use={bind.value(
+              preferences,
+              (state) => state.search,
+              (search) => ({ search }),
+            )}
           />
         </label>
-        {view(postsVm, (state) => state, (state) => <StatusLine state={state} />)}
+        {view(
+          postsVm,
+          (state) => state,
+          (state) => (
+            <StatusLine state={state} />
+          ),
+        )}
       </section>
 
-      {view(postsVm, (state) => state, (state) => {
-        if (state.loading && state.total === 0) return <p class="panel">Loading posts...</p>;
-        if (state.error && state.total === 0) return <pre class="panel error">{state.error}</pre>;
-        if (state.visible.length === 0) return <p class="panel">No posts match this filter.</p>;
+      {view(
+        postsVm,
+        (state) => state,
+        (state) => {
+          if (state.loading && state.total === 0) return <p class="panel">Loading posts...</p>;
+          if (state.error && state.total === 0) return <pre class="panel error">{state.error}</pre>;
+          if (state.visible.length === 0) return <p class="panel">No posts match this filter.</p>;
 
-        return (
-          <div class="post-list">
-            {state.visible.map((post) => (
-              <article class="panel post-card" data-id={post.id}>
-                <span>#{post.id}</span>
-                <h2>{post.title}</h2>
-                <p>{post.body}</p>
-              </article>
-            ))}
-          </div>
-        );
-      })}
+          return (
+            <div class="post-list">
+              {state.visible.map((post) => (
+                <article class="panel post-card" data-id={post.id}>
+                  <span>#{post.id}</span>
+                  <h2>{post.title}</h2>
+                  <p>{post.body}</p>
+                </article>
+              ))}
+            </div>
+          );
+        },
+      )}
     </section>
   );
 }
@@ -290,15 +324,16 @@ function PostsPage() {
 function StatusLine(props: { state: PostsVm }) {
   const state = props.state;
   const updated = state.updatedAt ? new Date(state.updatedAt).toLocaleTimeString() : "never";
-  const filter = state.search ? `, ${state.visible.length} visible for “${state.search}”` : `, showing ${state.visible.length}`;
+  const filter = state.search
+    ? `, ${state.visible.length} visible for “${state.search}”`
+    : `, showing ${state.visible.length}`;
   const stale = state.stale ? ", stale data visible" : "";
 
   return (
     <p class="muted">
       Status: <strong>{state.loading ? "loading" : state.status}</strong>, total {state.total}
       {filter}. Last updated: {updated}
-      {stale}.
-      {state.error ? <span class="error-text"> Error: {state.error}</span> : null}
+      {stale}.{state.error ? <span class="error-text"> Error: {state.error}</span> : null}
     </p>
   );
 }
@@ -309,13 +344,20 @@ function AuthPage() {
       <header class="panel">
         <p class="eyebrow">Token auth</p>
         <h1>Authentication</h1>
-        <p>The demo uses a fake login, stores the token, and attaches an Authorization header to API requests.</p>
+        <p>
+          The demo uses a fake login, stores the token, and attaches an Authorization header to API
+          requests.
+        </p>
       </header>
 
-      {view(auth.store, (state) => state, (state) => {
-        if (state.token) return <AuthenticatedPanel />;
-        return <LoginPanel />;
-      })}
+      {view(
+        auth.store,
+        (state) => state,
+        (state) => {
+          if (state.token) return <AuthenticatedPanel />;
+          return <LoginPanel />;
+        },
+      )}
     </section>
   );
 }
@@ -383,32 +425,36 @@ function CachePage() {
         </div>
       </header>
 
-      {view(cacheInspector, (state) => state.version, () => {
-        const keys = appCache.keys().sort();
-        if (keys.length === 0) return <p class="panel">No demo cache keys.</p>;
+      {view(
+        cacheInspector,
+        (state) => state.version,
+        () => {
+          const keys = appCache.keys().sort();
+          if (keys.length === 0) return <p class="panel">No demo cache keys.</p>;
 
-        return (
-          <section class="panel stack compact">
-            <h2>Keys</h2>
-            <ul class="cache-list">
-              {keys.map((key) => (
-                <li>
-                  <code>demo:{key}</code>
-                  <button
-                    class="ghost small"
-                    onClick={() => {
-                      appCache.remove(key);
-                      refreshCacheInspector();
-                    }}
-                  >
-                    remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+          return (
+            <section class="panel stack compact">
+              <h2>Keys</h2>
+              <ul class="cache-list">
+                {keys.map((key) => (
+                  <li>
+                    <code>demo:{key}</code>
+                    <button
+                      class="ghost small"
+                      onClick={() => {
+                        appCache.remove(key);
+                        refreshCacheInspector();
+                      }}
+                    >
+                      remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        },
+      )}
     </section>
   );
 }
@@ -427,12 +473,12 @@ const router = createRouter(
     { path: "/", title: "mini-ria", component: HomePage },
     { path: "/posts", title: "Posts | mini-ria", component: PostsPage },
     { path: "/auth", title: "Auth | mini-ria", component: AuthPage },
-    { path: "/cache", title: "Cache | mini-ria", component: CachePage }
+    { path: "/cache", title: "Cache | mini-ria", component: CachePage },
   ],
   {
     mode: "hash",
-    fallback: NotFound
-  }
+    fallback: NotFound,
+  },
 );
 
 function App() {
@@ -441,7 +487,14 @@ function App() {
   return (
     <div class="app-shell">
       <aside class="sidebar">
-        <a class="brand" href={router.href("/")} onClick={(event) => { event.preventDefault(); router.navigate("/"); }}>
+        <a
+          class="brand"
+          href={router.href("/")}
+          onClick={(event) => {
+            event.preventDefault();
+            router.navigate("/");
+          }}
+        >
           <span class="brand-mark">m</span>
           <span>mini-ria</span>
         </a>

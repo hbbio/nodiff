@@ -14,7 +14,7 @@ export const AuthTokenSchema: z.ZodType<AuthToken> = z
     accessToken: z.string().min(1),
     refreshToken: z.string().optional(),
     expiresAt: z.number().optional(),
-    tokenType: z.string().optional()
+    tokenType: z.string().optional(),
   })
   .passthrough();
 
@@ -32,7 +32,9 @@ export type AuthOptions<TToken extends AuthToken> = {
   tokenSchema?: z.ZodType<TToken>;
 };
 
-export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken>(options: AuthOptions<TToken> = {}) {
+export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken>(
+  options: AuthOptions<TToken> = {},
+) {
   const storageKey = options.storageKey ?? "ria:auth";
   const schema = options.tokenSchema ?? (AuthTokenSchema as z.ZodType<TToken>);
   const cache = createLocalCache("");
@@ -46,11 +48,11 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
       set((state) => ({
         token,
         user: user === undefined ? state.user : user,
-        status: "authenticated"
+        status: "authenticated",
       }));
     },
     setUser: (user) => set({ user }),
-    clear: () => set({ token: null, user: null, status: "anonymous" })
+    clear: () => set({ token: null, user: null, status: "anonymous" }),
   }));
 
   store.subscribe((state, previous) => {
@@ -67,7 +69,7 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
     const token = store.getState().token;
     if (!token?.accessToken) return {};
     return {
-      Authorization: `${token.tokenType ?? "Bearer"} ${token.accessToken}`
+      Authorization: `${token.tokenType ?? "Bearer"} ${token.accessToken}`,
     };
   }
 
@@ -89,7 +91,7 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
     isAuthenticated,
     setToken: (token: TToken, user?: TUser | null) => store.getState().setToken(token, user),
     setUser: (user: TUser | null) => store.getState().setUser(user),
-    logout: () => store.getState().clear()
+    logout: () => store.getState().clear(),
   };
 }
 

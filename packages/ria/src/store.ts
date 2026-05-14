@@ -18,7 +18,7 @@ export function subscribeSelector<TState, TValue>(
   store: ReadableStore<TState>,
   selector: Selector<TState, TValue>,
   listener: (value: TValue, previousValue: TValue, state: TState, previousState: TState) => void,
-  equality: Equality<TValue> = Object.is
+  equality: Equality<TValue> = Object.is,
 ): () => void {
   let current = selector(store.getState());
 
@@ -35,7 +35,7 @@ export function effect<TState, TValue>(
   store: ReadableStore<TState>,
   selector: Selector<TState, TValue>,
   run: (value: TValue, previousValue: TValue | undefined, state: TState) => void,
-  equality?: Equality<TValue>
+  equality?: Equality<TValue>,
 ): Action {
   return (element) => {
     let previous: TValue | undefined;
@@ -50,7 +50,7 @@ export function effect<TState, TValue>(
         previous = oldValue;
         run(value, previous, state);
       },
-      equality
+      equality,
     );
 
     void element;
@@ -61,8 +61,9 @@ export function effect<TState, TValue>(
 export function text<TState, TValue>(
   store: ReadableStore<TState>,
   selector: Selector<TState, TValue>,
-  format: (value: TValue) => string = (value) => (value === null || value === undefined ? "" : String(value)),
-  equality?: Equality<TValue>
+  format: (value: TValue) => string = (value) =>
+    value === null || value === undefined ? "" : String(value),
+  equality?: Equality<TValue>,
 ): Text {
   const node = document.createTextNode(format(selector(store.getState())));
   const unsubscribe = subscribeSelector(
@@ -71,7 +72,7 @@ export function text<TState, TValue>(
     (value) => {
       node.data = format(value);
     },
-    equality
+    equality,
   );
   addCleanup(node, unsubscribe);
   return node;
@@ -81,7 +82,7 @@ export function view<TState, TValue>(
   store: ReadableStore<TState>,
   selector: Selector<TState, TValue>,
   render: (value: TValue, state: TState) => Child,
-  options: { equality?: Equality<TValue> } = {}
+  options: { equality?: Equality<TValue> } = {},
 ): DocumentFragment {
   const start = document.createComment("view:start");
   const end = document.createComment("view:end");
@@ -102,7 +103,7 @@ export function view<TState, TValue>(
     store,
     selector,
     (value, _oldValue, state) => draw(value, state),
-    options.equality
+    options.equality,
   );
 
   addCleanup(start, () => {
@@ -117,22 +118,22 @@ export function when<TState>(
   store: ReadableStore<TState>,
   predicate: Selector<TState, boolean>,
   yes: (state: TState) => Child,
-  no?: (state: TState) => Child
+  no?: (state: TState) => Child,
 ): DocumentFragment {
-  return view(store, predicate, (enabled, state) => (enabled ? yes(state) : no?.(state) ?? null));
+  return view(store, predicate, (enabled, state) => (enabled ? yes(state) : (no?.(state) ?? null)));
 }
 
 export function list<TState, TItem>(
   store: ReadableStore<TState>,
   selector: Selector<TState, readonly TItem[]>,
   render: (item: TItem, index: number, items: readonly TItem[]) => Child,
-  options: { equality?: Equality<readonly TItem[]> } = {}
+  options: { equality?: Equality<readonly TItem[]> } = {},
 ): DocumentFragment {
   return view(
     store,
     selector,
     (items) => items.map((item, index) => render(item, index, items)),
-    options
+    options,
   );
 }
 
@@ -168,8 +169,9 @@ export const bind = {
   text<TState, TValue>(
     store: ReadableStore<TState>,
     selector: Selector<TState, TValue>,
-    format: (value: TValue) => string = (value) => (value === null || value === undefined ? "" : String(value)),
-    equality?: Equality<TValue>
+    format: (value: TValue) => string = (value) =>
+      value === null || value === undefined ? "" : String(value),
+    equality?: Equality<TValue>,
   ): Action<HTMLElement> {
     return (element) => {
       const sync = (value: TValue) => {
@@ -184,7 +186,7 @@ export const bind = {
     name: string,
     store: ReadableStore<TState>,
     selector: Selector<TState, TValue>,
-    equality?: Equality<TValue>
+    equality?: Equality<TValue>,
   ): Action<Element> {
     return (element) => {
       const sync = (value: TValue) => setAttributeValue(element, name, value);
@@ -197,7 +199,7 @@ export const bind = {
     name: string,
     store: ReadableStore<TState>,
     selector: Selector<TState, boolean>,
-    equality?: Equality<boolean>
+    equality?: Equality<boolean>,
   ): Action<Element> {
     return (element) => {
       const sync = (enabled: boolean) => element.classList.toggle(name, enabled);
@@ -210,10 +212,16 @@ export const bind = {
     store: WritableStore<TState>,
     selector: Selector<TState, TValue>,
     commit: (value: string, state: TState) => Partial<TState> | TState | void,
-    options: { event?: "input" | "change"; format?: (value: TValue) => string; equality?: Equality<TValue> } = {}
+    options: {
+      event?: "input" | "change";
+      format?: (value: TValue) => string;
+      equality?: Equality<TValue>;
+    } = {},
   ): Action<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> {
     return (element) => {
-      const format = options.format ?? ((value: TValue) => (value === null || value === undefined ? "" : String(value)));
+      const format =
+        options.format ??
+        ((value: TValue) => (value === null || value === undefined ? "" : String(value)));
       const sync = (value: TValue) => {
         const next = format(value);
         if (element.value !== next) element.value = next;
@@ -237,7 +245,7 @@ export const bind = {
     store: WritableStore<TState>,
     selector: Selector<TState, boolean>,
     commit: (checked: boolean, state: TState) => Partial<TState> | TState | void,
-    equality?: Equality<boolean>
+    equality?: Equality<boolean>,
   ): Action<HTMLInputElement> {
     return (element) => {
       const sync = (checked: boolean) => {
@@ -255,5 +263,5 @@ export const bind = {
         element.removeEventListener("change", handler);
       };
     };
-  }
+  },
 };

@@ -29,7 +29,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     error: null,
     updatedAt: initialData === null ? null : Date.now(),
     loading: false,
-    stale: false
+    stale: false,
   }));
 
   let lastArgs: TArgs | undefined;
@@ -45,7 +45,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
       status: current.data === null ? "loading" : "success",
       loading: true,
       stale: current.data !== null,
-      error: null
+      error: null,
     });
 
     try {
@@ -56,7 +56,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
         error: null,
         updatedAt: Date.now(),
         loading: false,
-        stale: false
+        stale: false,
       });
       return data;
     } catch (error) {
@@ -65,7 +65,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
         status: "error",
         error: error instanceof Error ? error : new Error(String(error)),
         loading: false,
-        stale: store.getState().data !== null
+        stale: store.getState().data !== null,
       });
       return undefined;
     }
@@ -76,12 +76,13 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
   }
 
   function mutate(next: T | ((current: T | null) => T)): void {
-    const value = typeof next === "function" ? (next as (current: T | null) => T)(store.getState().data) : next;
+    const value =
+      typeof next === "function" ? (next as (current: T | null) => T)(store.getState().data) : next;
     store.setState({
       data: value,
       status: "success",
       updatedAt: Date.now(),
-      stale: false
+      stale: false,
     });
   }
 
@@ -93,7 +94,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
       error: null,
       updatedAt: initialData === null ? null : Date.now(),
       loading: false,
-      stale: false
+      stale: false,
     });
   }
 
@@ -105,7 +106,7 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     refresh,
     mutate,
     reset,
-    abort: () => controller?.abort()
+    abort: () => controller?.abort(),
   };
 }
 

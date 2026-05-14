@@ -9,7 +9,7 @@ export function jsxDEV(
   _key?: unknown,
   _isStaticChildren?: boolean,
   _source?: unknown,
-  _self?: unknown
+  _self?: unknown,
 ): Child {
   return jsx(type, props);
 }

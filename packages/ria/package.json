@@ -1,6 +1,9 @@
 {
   "name": "@mini-ria/core",
   "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -17,9 +20,6 @@
       "import": "./dist/jsx-dev-runtime.js"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsgo -p tsconfig.build.json",
     "typecheck": "tsgo -p tsconfig.json --noEmit"

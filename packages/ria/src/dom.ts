@@ -8,12 +8,21 @@ export type Action<T extends Element = Element> = (element: T) => void | (() => 
 
 type EventPair = [EventListenerOrEventListenerObject, AddEventListenerOptions?];
 
-export type StyleValue = string | Partial<CSSStyleDeclaration> | Record<string, string | number | null | undefined>;
+export type StyleValue =
+  | string
+  | Partial<CSSStyleDeclaration>
+  | Record<string, string | number | null | undefined>;
 
 export type ElementProps<T extends Element = Element> = {
   children?: Child;
   class?: string | string[] | Record<string, boolean | undefined | null> | false | null | undefined;
-  className?: string | string[] | Record<string, boolean | undefined | null> | false | null | undefined;
+  className?:
+    | string
+    | string[]
+    | Record<string, boolean | undefined | null>
+    | false
+    | null
+    | undefined;
   style?: StyleValue;
   ref?: Ref<T>;
   use?: Action<T> | Array<Action<T> | false | null | undefined> | false | null | undefined;
@@ -85,7 +94,7 @@ const svgTags = new Set([
   "text",
   "textPath",
   "tspan",
-  "use"
+  "use",
 ]);
 
 function isIterable(value: unknown): value is Iterable<Child> {
@@ -119,7 +128,12 @@ function classValue(value: ElementProps["class"]): string | undefined {
 function domString(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || typeof value === "symbol") {
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "boolean" ||
+    typeof value === "symbol"
+  ) {
     return String(value);
   }
   if (value instanceof Date) return value.toISOString();
@@ -138,17 +152,26 @@ function setStyle(element: Element, value: StyleValue): void {
   }
 
   const style = (element as HTMLElement).style;
-  for (const [key, raw] of Object.entries(value as Record<string, string | number | null | undefined>)) {
+  for (const [key, raw] of Object.entries(
+    value as Record<string, string | number | null | undefined>,
+  )) {
     if (raw === null || raw === undefined) {
-      style.removeProperty(key.includes("-") ? key : key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`));
+      style.removeProperty(
+        key.includes("-") ? key : key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`),
+      );
       continue;
     }
-    const cssName = key.includes("-") ? key : key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+    const cssName = key.includes("-")
+      ? key
+      : key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
     style.setProperty(cssName, typeof raw === "number" ? String(raw) : raw);
   }
 }
 
-function setDataset(element: Element, value: Record<string, string | number | boolean | null | undefined>): void {
+function setDataset(
+  element: Element,
+  value: Record<string, string | number | boolean | null | undefined>,
+): void {
   const dataset = (element as HTMLElement).dataset;
   for (const [key, raw] of Object.entries(value)) {
     if (raw === null || raw === undefined || raw === false) {
@@ -159,7 +182,10 @@ function setDataset(element: Element, value: Record<string, string | number | bo
   }
 }
 
-function setAria(element: Element, value: Record<string, string | number | boolean | null | undefined>): void {
+function setAria(
+  element: Element,
+  value: Record<string, string | number | boolean | null | undefined>,
+): void {
   for (const [key, raw] of Object.entries(value)) {
     const name = key.startsWith("aria-") ? key : `aria-${key}`;
     if (raw === null || raw === undefined || raw === false) {
@@ -319,7 +345,11 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
     applyProp(element, name, value);
   }
 
-  if (currentProps.children !== undefined && currentProps.innerHTML === undefined && currentProps.textContent === undefined) {
+  if (
+    currentProps.children !== undefined &&
+    currentProps.innerHTML === undefined &&
+    currentProps.textContent === undefined
+  ) {
     append(element, currentProps.children);
   }
 
@@ -332,9 +362,16 @@ export function Fragment(props: { children?: Child }): DocumentFragment {
   return fragment(props.children);
 }
 
-export function mount(host: Element | string, node: Child | Component, props?: Record<string, unknown>): () => void {
+export function mount(
+  host: Element | string,
+  node: Child | Component,
+  props?: Record<string, unknown>,
+): () => void {
   const element = typeof host === "string" ? document.querySelector(host) : host;
-  if (!element) throw new Error(`Mount target not found: ${typeof host === "string" ? host : host.tagName.toLowerCase()}`);
+  if (!element)
+    throw new Error(
+      `Mount target not found: ${typeof host === "string" ? host : host.tagName.toLowerCase()}`,
+    );
 
   const rendered = typeof node === "function" ? (node as Component)(props ?? {}) : node;
   replaceChildrenClean(element, toNodes(rendered));
@@ -348,7 +385,7 @@ export function mount(host: Element | string, node: Child | Component, props?: R
 export function on<T extends Element, K extends keyof HTMLElementEventMap>(
   type: K,
   handler: (event: HTMLElementEventMap[K] & { currentTarget: T }) => void,
-  options?: AddEventListenerOptions
+  options?: AddEventListenerOptions,
 ): Action<T> {
   return (element) => {
     const listener = handler as EventListener;

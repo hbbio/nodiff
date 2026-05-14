@@ -34,7 +34,11 @@ export class LocalCache {
     return `${this.prefix}${key}`;
   }
 
-  get<T>(key: string, schema?: CacheSchema<T>, options: CacheReadOptions = {}): CacheEntry<T> | undefined {
+  get<T>(
+    key: string,
+    schema?: CacheSchema<T>,
+    options: CacheReadOptions = {},
+  ): CacheEntry<T> | undefined {
     if (!canUseLocalStorage()) return undefined;
     const raw = window.localStorage.getItem(this.fullKey(key));
     if (!raw) return undefined;
@@ -53,7 +57,9 @@ export class LocalCache {
         return undefined;
       }
 
-      const value = schema ? schema.safeParse(parsed.value) : { success: true, data: parsed.value as T };
+      const value = schema
+        ? schema.safeParse(parsed.value)
+        : { success: true, data: parsed.value as T };
       if (!value.success) {
         this.remove(key);
         return undefined;
@@ -65,7 +71,7 @@ export class LocalCache {
         updatedAt: Number(parsed.updatedAt) || 0,
         expiresAt,
         tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-        stale
+        stale,
       };
     } catch {
       this.remove(key);
@@ -79,7 +85,7 @@ export class LocalCache {
       value,
       updatedAt: Date.now(),
       expiresAt: typeof options.ttl === "number" ? Date.now() + options.ttl : null,
-      tags: options.tags ?? []
+      tags: options.tags ?? [],
     };
     window.localStorage.setItem(this.fullKey(key), JSON.stringify(envelope));
   }

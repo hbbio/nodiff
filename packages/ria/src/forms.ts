@@ -21,7 +21,9 @@ export function formValues(form: HTMLFormElement): FormValues {
   return values;
 }
 
-function validatable(element: Element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
+function validatable(
+  element: Element,
+): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
   return "setCustomValidity" in element && "reportValidity" in element;
 }
 
@@ -52,7 +54,7 @@ export function zodSubmit<T>(
   options: {
     onError?: (error: z.ZodError, form: HTMLFormElement) => void;
     resetOnSuccess?: boolean;
-  } = {}
+  } = {},
 ): Action<HTMLFormElement> {
   return (form) => {
     const submit = async (event: SubmitEvent) => {

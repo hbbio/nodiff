@@ -37,7 +37,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly statusText: string,
     public readonly url: string,
-    public readonly payload: unknown
+    public readonly payload: unknown,
   ) {
     super(`HTTP ${status} ${statusText}`);
     this.name = "ApiError";
@@ -52,9 +52,16 @@ function appendQuery(url: URL, query: Record<string, QueryValue> | undefined): v
   }
 }
 
-function resolveUrl(baseUrl: string | undefined, path: string, query: Record<string, QueryValue> | undefined): string {
-  const base = baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost");
-  const url = /^https?:\/\//i.test(path) ? new URL(path) : new URL(path, base.endsWith("/") ? base : `${base}/`);
+function resolveUrl(
+  baseUrl: string | undefined,
+  path: string,
+  query: Record<string, QueryValue> | undefined,
+): string {
+  const base =
+    baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost");
+  const url = /^https?:\/\//i.test(path)
+    ? new URL(path)
+    : new URL(path, base.endsWith("/") ? base : `${base}/`);
   appendQuery(url, query);
   return url.toString();
 }
@@ -84,7 +91,11 @@ async function readPayload(response: Response): Promise<unknown> {
 export function createApi(options: ApiClientOptions = {}) {
   const cache = options.cache ?? createLocalCache("ria:http:");
 
-  async function runFetch<T>(url: string, request: ApiRequestOptions<T>, retry: boolean): Promise<T> {
+  async function runFetch<T>(
+    url: string,
+    request: ApiRequestOptions<T>,
+    retry: boolean,
+  ): Promise<T> {
     const headers = new Headers();
     applyHeaders(headers, options.headers);
     applyHeaders(headers, request.headers);
@@ -106,7 +117,7 @@ export function createApi(options: ApiClientOptions = {}) {
     const body = request.body;
     const init: RequestInit = {
       method: request.method ?? (body === undefined ? "GET" : "POST"),
-      headers
+      headers,
     };
     if (request.signal) init.signal = request.signal;
     if (request.credentials) init.credentials = request.credentials;
@@ -137,15 +148,20 @@ export function createApi(options: ApiClientOptions = {}) {
     return request.schema ? request.schema.parse(payload) : (payload as T);
   }
 
-  async function request<T = unknown>(path: string, requestOptions: ApiRequestOptions<T> = {}): Promise<T> {
+  async function request<T = unknown>(
+    path: string,
+    requestOptions: ApiRequestOptions<T> = {},
+  ): Promise<T> {
     const method = requestOptions.method ?? (requestOptions.body === undefined ? "GET" : "POST");
     const url = resolveUrl(options.baseUrl, path, requestOptions.query);
     const cacheOptions = requestOptions.cache;
     const canCache = method === "GET" && cacheOptions !== false && cacheOptions !== undefined;
-    const cacheKey = canCache ? cacheOptions.key ?? `${method}:${url}` : "";
+    const cacheKey = canCache ? (cacheOptions.key ?? `${method}:${url}`) : "";
 
     if (canCache) {
-      const hit = cache.get<T>(cacheKey, requestOptions.schema, { allowStale: Boolean(cacheOptions.swr) });
+      const hit = cache.get<T>(cacheKey, requestOptions.schema, {
+        allowStale: Boolean(cacheOptions.swr),
+      });
       if (hit && !hit.stale) return hit.value;
       if (hit && hit.stale && cacheOptions.swr) {
         void runFetch<T>(url, requestOptions, true)
@@ -165,19 +181,31 @@ export function createApi(options: ApiClientOptions = {}) {
     get<T = unknown>(path: string, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
       return request<T>(path, { ...options, method: "GET" });
     },
-    post<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
+    post<T = unknown>(
+      path: string,
+      body?: unknown,
+      options?: Omit<ApiRequestOptions<T>, "method" | "body">,
+    ) {
       return request<T>(path, { ...options, method: "POST", body });
     },
-    put<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
+    put<T = unknown>(
+      path: string,
+      body?: unknown,
+      options?: Omit<ApiRequestOptions<T>, "method" | "body">,
+    ) {
       return request<T>(path, { ...options, method: "PUT", body });
     },
-    patch<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
+    patch<T = unknown>(
+      path: string,
+      body?: unknown,
+      options?: Omit<ApiRequestOptions<T>, "method" | "body">,
+    ) {
       return request<T>(path, { ...options, method: "PATCH", body });
     },
     delete<T = unknown>(path: string, options?: Omit<ApiRequestOptions<T>, "method" | "body">) {
       return request<T>(path, { ...options, method: "DELETE" });
     },
-    cache
+    cache,
   };
 }
 

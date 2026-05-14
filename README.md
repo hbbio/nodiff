@@ -31,6 +31,12 @@ bun run typecheck
 bun run lint
 ```
 
+## Format
+
+```sh
+bun run format
+```
+
 ## Check
 
 ```sh

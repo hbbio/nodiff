@@ -113,8 +113,8 @@ function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): Rout
         pathname,
         query,
         params,
-        route: item.route
-      }
+        route: item.route,
+      },
     };
   }
 
@@ -122,11 +122,14 @@ function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): Rout
     path: `${pathname}${query.toString() ? `?${query.toString()}` : ""}`,
     pathname,
     query,
-    match: null
+    match: null,
   };
 }
 
-export function createRouter<TMeta = unknown>(routes: RouteDefinition<TMeta>[], options: RouterOptions<TMeta> = {}): Router<TMeta> {
+export function createRouter<TMeta = unknown>(
+  routes: RouteDefinition<TMeta>[],
+  options: RouterOptions<TMeta> = {},
+): Router<TMeta> {
   const mode = options.mode ?? "history";
   const compiled = routes.map(compileRoute);
 
@@ -186,15 +189,21 @@ export function createRouter<TMeta = unknown>(routes: RouteDefinition<TMeta>[], 
         (_path, state) => {
           const match = state.match;
           if (!match) {
-            return options.fallback?.(state) ??
+            return (
+              options.fallback?.(state) ??
               jsx("section", {
                 class: "panel",
-                children: [jsx("h1", { children: "Not found" }), jsx("p", { children: state.pathname })]
-              });
+                children: [
+                  jsx("h1", { children: "Not found" }),
+                  jsx("p", { children: state.pathname }),
+                ],
+              })
+            );
           }
-          if (match.route.title && typeof document !== "undefined") document.title = match.route.title;
+          if (match.route.title && typeof document !== "undefined")
+            document.title = match.route.title;
           return match.route.component({ ...match, router });
-        }
+        },
       );
     },
     Link(props: LinkProps): Child {
@@ -202,7 +211,9 @@ export function createRouter<TMeta = unknown>(routes: RouteDefinition<TMeta>[], 
       const active: Action<HTMLAnchorElement> | undefined = activeClass
         ? (element) => {
             const select = (state: RouterState<TMeta>) =>
-              exact ? state.path === normalizePath(to) : state.pathname.startsWith(parsePath(to).pathname);
+              exact
+                ? state.path === normalizePath(to)
+                : state.pathname.startsWith(parsePath(to).pathname);
             const syncActive = (enabled: boolean) => element.classList.toggle(activeClass, enabled);
             syncActive(select(store.getState()));
             return subscribeSelector(store, select, syncActive);
@@ -210,9 +221,11 @@ export function createRouter<TMeta = unknown>(routes: RouteDefinition<TMeta>[], 
         : undefined;
 
       const click = (event: MouseEvent) => {
-        if (typeof onClick === "function") onClick(event as MouseEvent & { currentTarget: HTMLAnchorElement });
+        if (typeof onClick === "function")
+          onClick(event as MouseEvent & { currentTarget: HTMLAnchorElement });
         if (event.defaultPrevented) return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+          return;
         event.preventDefault();
         router.navigate(to, { replace: Boolean(replace) });
       };
@@ -225,9 +238,9 @@ export function createRouter<TMeta = unknown>(routes: RouteDefinition<TMeta>[], 
         href: router.href(to),
         onClick: click,
         use: actions,
-        children: children as Child
+        children: children as Child,
       });
-    }
+    },
   };
 
   return router;
