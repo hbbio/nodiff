@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
-import { ErrorBoundary, jsx, mount, sanitizeHTML, trustedHTML } from "../src/dom";
+import {
+  ErrorBoundary,
+  Fragment,
+  fragment,
+  jsx,
+  mount,
+  on,
+  sanitizeHTML,
+  setText,
+  toNodes,
+  trustedHTML,
+} from "../src/dom";
 import { configureSecurityPolicy, type SecurityViolation } from "../src/security";
 import { text, view } from "../src/store";
 import { installDom } from "./test-dom";
@@ -178,6 +189,108 @@ describe("DOM runtime", () => {
     );
 
     expect(childCount).toBe(2);
+
+    unmount();
+  });
+
+  test("applies JSX prop variants for classes, refs, events, and coerced attributes", () => {
+    const objectRef: { current: HTMLInputElement | null } = { current: null };
+    let functionRef: Element | null = null;
+    let pairClicks = 0;
+    let helperClicks = 0;
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    const unmount = mount("#app", [
+      jsx("button", {
+        class: ["primary", "", "wide"],
+        className: { active: true, hidden: false },
+        style: { color: "red", backgroundColor: null },
+        dataset: { id: "save", gone: false },
+        aria: { label: "Save", hidden: false },
+        ref: (node) => {
+          functionRef = node;
+        },
+        onClick: [
+          () => {
+            pairClicks += 1;
+          },
+          { once: true },
+        ],
+        "data-count": 2,
+        "data-symbol": Symbol("flag") as unknown as string,
+        "data-object": { ok: true } as unknown as string,
+        "data-circular": circular as unknown as string,
+        "aria-live": "polite",
+        custom: "value",
+        hidden: true,
+        title: false,
+        textContent: new Date("2020-01-02T00:00:00.000Z") as unknown as string,
+      }),
+      jsx("input", {
+        ref: objectRef,
+        value: 42,
+        use: on("click", () => {
+          helperClicks += 1;
+        }),
+      }),
+      jsx("div", { class: 7 as unknown as string }),
+      jsx("div", { className: false }),
+      jsx("div", { tagName: "section" }),
+    ]);
+
+    const button = document.querySelector("button") as HTMLButtonElement;
+    const input = document.querySelector("input") as HTMLInputElement;
+
+    expect(button.className).toBe("active");
+    expect(button.style.color).toBe("red");
+    expect(button.dataset.id).toBe("save");
+    expect(button.dataset.gone).toBeUndefined();
+    expect(button.getAttribute("aria-label")).toBe("Save");
+    expect(button.hasAttribute("aria-hidden")).toBe(false);
+    expect(button.getAttribute("data-count")).toBe("2");
+    expect(button.getAttribute("data-symbol")).toBe("Symbol(flag)");
+    expect(button.getAttribute("data-object")).toBe('{"ok":true}');
+    expect(button.getAttribute("data-circular")).toBe("[object Object]");
+    expect(button.getAttribute("aria-live")).toBe("polite");
+    expect(button.getAttribute("custom")).toBe("value");
+    expect(button.hidden).toBe(true);
+    expect(button.hasAttribute("title")).toBe(false);
+    expect(button.textContent).toBe("2020-01-02T00:00:00.000Z");
+    expect(functionRef).toBe(button);
+    expect(objectRef.current).toBe(input);
+    expect(input.value).toBe("42");
+    expect(document.querySelectorAll("div")[0]?.className).toBe("7");
+    expect(document.querySelectorAll("div")[2]?.getAttribute("tagName")).toBe("section");
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(pairClicks).toBe(1);
+    expect(helperClicks).toBe(1);
+
+    unmount();
+    expect(objectRef.current).toBeNull();
+
+    input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(helperClicks).toBe(1);
+  });
+
+  test("supports fragments, components, iterable children, and missing mount errors", () => {
+    const Component = (props: { children?: unknown }) =>
+      jsx("strong", { children: props.children as string });
+    const nodes = toNodes(new Set(["A", jsx("span", { children: "B" })]));
+    const empty = fragment();
+    const built = Fragment({
+      children: [jsx(Component, { children: "Ready" }), fragment(nodes), setText(null), setText(5)],
+    });
+
+    const unmount = mount("#app", built);
+
+    expect(empty.childNodes).toHaveLength(0);
+    expect(document.querySelector("#app")?.textContent).toBe("ReadyAB5");
+    expect(() => mount("#missing", "Nope")).toThrow("Mount target not found: #missing");
 
     unmount();
   });

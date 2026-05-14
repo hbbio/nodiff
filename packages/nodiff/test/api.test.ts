@@ -117,6 +117,23 @@ describe("createApi", () => {
     expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe("Bearer token");
   });
 
+  test("uses managed auth header providers before token fallback", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      getAuthHeaders: () => ({ Authorization: "Token custom" }),
+      getToken: () => "fallback",
+    });
+
+    await api.get("/me", { auth: "required" });
+
+    expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe("Token custom");
+  });
+
   test("requires explicit auth headers for required auth on other origins", async () => {
     const api = createApi({
       baseUrl: "/api",
@@ -144,6 +161,42 @@ describe("createApi", () => {
     expect(user).toEqual({ id: 1, name: "Ada" });
     expect(calls[0]?.init?.body).toBe('{"name":"Ada"}');
     expect(new Headers(calls[0]?.init?.headers).get("content-type")).toBe("application/json");
+  });
+
+  test("passes through non-JSON request bodies", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const body = new URLSearchParams({ q: "search" });
+    const api = createApi({ baseUrl: "/api" });
+
+    await api.post("/search", body);
+
+    expect(calls[0]?.init?.body).toBe(body);
+    expect(new Headers(calls[0]?.init?.headers).get("content-type")).toBeNull();
+  });
+
+  test("notifies unauthorized failures when refresh is unavailable", async () => {
+    const unauthorized: ApiError[] = [];
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ error: "expired" }, { status: 401, statusText: "Unauthorized" });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      getToken: () => "expired",
+      onUnauthorized: (error) => {
+        unauthorized.push(error);
+      },
+    });
+
+    await expect(api.get("/me", { auth: "required" })).rejects.toThrow(ApiError);
+
+    expect(unauthorized).toHaveLength(1);
+    expect(unauthorized[0]?.status).toBe(401);
   });
 
   test("handles 204 and text responses", async () => {
@@ -213,6 +266,49 @@ describe("createApi", () => {
     expect(cache.keys().some((key) => key.includes("alice") || key.includes("bob"))).toBe(false);
   });
 
+  test("returns stale cached data while refreshing it in the background", async () => {
+    const cache = createLocalCache("api-swr-test:");
+    cache.set("settings", { version: "stale" }, { ttl: -1 });
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ version: "fresh" });
+    };
+
+    const api = createApi({ baseUrl: "/api", cache });
+
+    await expect(
+      api.get<{ version: string }>("/settings", {
+        cache: { key: "settings", ttl: 60_000, swr: true },
+      }),
+    ).resolves.toEqual({ version: "stale" });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toHaveLength(1);
+    expect(cache.get<{ version: string }>("settings")?.value).toEqual({ version: "fresh" });
+  });
+
+  test("swallows failed background stale refreshes", async () => {
+    const cache = createLocalCache("api-swr-fail-test:");
+    cache.set("settings", { version: "stale" }, { ttl: -1 });
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      throw new Error("network down");
+    };
+
+    const api = createApi({ baseUrl: "/api", cache });
+
+    await expect(
+      api.get<{ version: string }>("/settings", {
+        cache: { key: "settings", ttl: 60_000, swr: true },
+      }),
+    ).resolves.toEqual({ version: "stale" });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toHaveLength(1);
+  });
+
   test("adds CSRF tokens to state-changing requests", async () => {
     globalThis.fetch = async (url, init) => {
       calls.push({ url: inputUrl(url), init });
@@ -256,6 +352,59 @@ describe("createApi", () => {
     await api.patch("/profile", { name: "Ada" });
 
     expect(new Headers(calls[0]?.init?.headers).get("x-csrf-token")).toBe("cookie-token");
+  });
+
+  test("sends PUT requests through the method helper", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({ baseUrl: "/api" });
+
+    await expect(api.put("/settings", { theme: "light" })).resolves.toEqual({ ok: true });
+
+    expect(calls[0]?.url).toBe("https://example.test/api/settings");
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(calls[0]?.init?.body).toBe('{"theme":"light"}');
+  });
+
+  test("propagates caller abort signals through timeout wrappers", async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException("Manual abort", "AbortError"));
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      if (init?.signal?.aborted) throw init.signal.reason;
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({ baseUrl: "/api" });
+
+    await expect(
+      api.request("/slow", { signal: controller.signal, timeout: 1_000 }),
+    ).rejects.toThrow("Manual abort");
+
+    expect(calls).toHaveLength(1);
+  });
+
+  test("aborts timeout-wrapped requests when caller signals fire later", async () => {
+    const controller = new AbortController();
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal?.reason ?? new DOMException("Aborted", "AbortError"));
+        });
+      });
+    };
+
+    const api = createApi({ baseUrl: "/api" });
+    const pending = api.get("/slow", { signal: controller.signal, timeout: 1_000 });
+
+    controller.abort(new DOMException("Later abort", "AbortError"));
+
+    await expect(pending).rejects.toThrow("Later abort");
+    expect(calls).toHaveLength(1);
   });
 
   test("requires a base URL for strict API clients", () => {

@@ -42,6 +42,33 @@ describe("router", () => {
     stop();
   });
 
+  test("syncs from browser navigation events and supports stop()", () => {
+    const router = createRouter(
+      [
+        { path: "/", component: () => "Home" },
+        { path: "/events", component: () => "Events" },
+      ],
+      { mode: "hash" },
+    );
+
+    const stop = router.start();
+    expect(router.start()).toBe(stop);
+    const unmount = mount("#app", router.outlet());
+
+    window.location.hash = "#/events";
+    window.dispatchEvent(new Event("hashchange"));
+
+    expect(document.querySelector("#app")?.textContent).toBe("Events");
+
+    router.stop();
+    window.location.hash = "#/";
+    window.dispatchEvent(new Event("hashchange"));
+
+    expect(document.querySelector("#app")?.textContent).toBe("Events");
+
+    unmount();
+  });
+
   test("falls back instead of throwing on malformed encoded params", () => {
     window.location.hash = "#/posts/%E0%A4%A";
 
@@ -174,6 +201,27 @@ describe("router", () => {
     stop();
   });
 
+  test("can replace the current history entry", () => {
+    const router = createRouter(
+      [
+        { path: "/", component: () => "Home" },
+        { path: "/settings", component: () => "Settings" },
+      ],
+      { mode: "history" },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", router.outlet());
+
+    router.navigate("/settings", { replace: true });
+
+    expect(window.location.pathname).toBe("/settings");
+    expect(document.querySelector("#app")?.textContent).toBe("Settings");
+
+    unmount();
+    stop();
+  });
+
   test("guards routes with fallback UI", () => {
     let authenticated = false;
     const router = createRouter(
@@ -202,6 +250,19 @@ describe("router", () => {
 
     unmount();
     stop();
+
+    const hidden = guardedRoute(
+      () => false,
+      () => "Hidden",
+    )({
+      path: "/hidden",
+      pathname: "/hidden",
+      params: {},
+      query: new URLSearchParams(),
+      route: { path: "/hidden", component: () => "Hidden" },
+      router,
+    });
+    expect(hidden).toBeNull();
   });
 
   test("renders successful routes without error reports", () => {

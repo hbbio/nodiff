@@ -158,6 +158,7 @@ function renderShowFallback<TState, TValue>(
 }
 
 export function Show<TState, TValue>(props: ShowProps<TState, TValue>): DocumentFragment {
+  const options = props.equality ? { equality: props.equality } : {};
   return view(
     props.store,
     props.when,
@@ -165,7 +166,7 @@ export function Show<TState, TValue>(props: ShowProps<TState, TValue>): Document
       value
         ? renderShowChild(props.children, value as NonNullable<TValue>, state)
         : renderShowFallback(props.fallback, state, value),
-    props.equality ? { equality: props.equality } : {},
+    options,
   );
 }
 

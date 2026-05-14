@@ -111,4 +111,75 @@ describe("createResource", () => {
       status: "idle",
     });
   });
+
+  test("treats abort-like loader errors as canceled loads", async () => {
+    const resource = createResource<string>({
+      load: async () => {
+        throw new DOMException("Aborted", "AbortError");
+      },
+    });
+
+    await expect(resource.load()).resolves.toBeUndefined();
+
+    expect(resource.store.getState()).toMatchObject({
+      data: null,
+      loading: false,
+      stale: false,
+      status: "idle",
+    });
+  });
+
+  test("handles failures, refreshes last args, mutates, and resets to initial data", async () => {
+    const calls: string[] = [];
+    const resource = createResource<string, string>({
+      initialData: "cached",
+      load: async (args) => {
+        calls.push(args);
+        throw "denied";
+      },
+    });
+
+    await expect(resource.load("first")).resolves.toBeUndefined();
+    expect(resource.store.getState()).toMatchObject({
+      data: "cached",
+      loading: false,
+      stale: true,
+      status: "error",
+    });
+    expect(resource.store.getState().error?.message).toBe("denied");
+
+    await expect(resource.refresh()).resolves.toBeUndefined();
+    expect(calls).toEqual(["first", "first"]);
+
+    resource.mutate((current) => `${current}:local`);
+    expect(resource.store.getState()).toMatchObject({
+      data: "cached:local",
+      status: "success",
+      stale: false,
+    });
+
+    resource.reset();
+    expect(resource.store.getState()).toMatchObject({
+      data: "cached",
+      error: null,
+      loading: false,
+      stale: false,
+      status: "success",
+    });
+  });
+
+  test("can start loading immediately", async () => {
+    const resource = createResource<string>({
+      immediate: true,
+      load: async () => "ready",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resource.store.getState()).toMatchObject({
+      data: "ready",
+      loading: false,
+      status: "success",
+    });
+  });
 });

@@ -65,6 +65,21 @@ describe("createAuth", () => {
     ).toBe("access");
   });
 
+  test("drops saved refresh tokens when restore is not opted in", () => {
+    const storageKey = "auth-test:saved-refresh-token";
+    const cache = createLocalCache("");
+    cache.set(storageKey, {
+      accessToken: "access",
+      refreshToken: "refresh",
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const auth = createAuth({ storageKey, persist: true });
+
+    expect(auth.getToken()).toBeNull();
+    expect(window.localStorage.getItem(storageKey)).toBeNull();
+  });
+
   test("drops expired saved tokens before authenticating", () => {
     const storageKey = "auth-test:expired-saved";
     const cache = createLocalCache("");
@@ -84,6 +99,34 @@ describe("createAuth", () => {
     expect(window.localStorage.getItem(storageKey)).toBeNull();
   });
 
+  test("removes persisted tokens on logout and expired subscription writes", () => {
+    const storageKey = "auth-test:persisted-clear";
+    const auth = createAuth({ storageKey, persist: true });
+
+    auth.setToken({
+      accessToken: "saved",
+      expiresAt: Date.now() + 60_000,
+    });
+    expect(window.localStorage.getItem(storageKey)).not.toBeNull();
+
+    auth.logout();
+    expect(window.localStorage.getItem(storageKey)).toBeNull();
+
+    const originalNow = Date.now;
+    const times = [1_000, 1_000, 1_002];
+    Date.now = () => times.shift() ?? 1_002;
+    try {
+      const racingAuth = createAuth({ storageKey: "auth-test:ttl-race", persist: true });
+      racingAuth.setToken({
+        accessToken: "race",
+        expiresAt: 1_001,
+      });
+      expect(window.localStorage.getItem("auth-test:ttl-race")).toBeNull();
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
   test("does not expose expired current tokens through auth helpers", () => {
     const auth = createAuth();
 
@@ -96,6 +139,31 @@ describe("createAuth", () => {
     expect(auth.getToken()).toBeNull();
     expect(new Headers(auth.authHeaders()).get("authorization")).toBeNull();
     expect(auth.isAuthenticated()).toBe(false);
+  });
+
+  test("formats optional auth headers and expiry helpers", () => {
+    const auth = createAuth<{ name: string }>();
+
+    expect(auth.isExpired()).toBe(false);
+    auth.setUser({ name: "Ada" });
+    expect(auth.store.getState().user).toEqual({ name: "Ada" });
+
+    auth.setToken({
+      accessToken: "custom",
+      tokenType: "Token",
+      expiresAt: Date.now() + 20_000,
+    });
+
+    expect(new Headers(auth.authHeaders()).get("authorization")).toBe("Token custom");
+    expect(auth.isExpired()).toBe(true);
+    expect(auth.isAuthenticated()).toBe(false);
+
+    auth.setToken({
+      accessToken: "fresh",
+      expiresAt: Date.now() + 60_000,
+    });
+    expect(auth.isExpired()).toBe(false);
+    expect(auth.isAuthenticated()).toBe(true);
   });
 
   test("exposes required auth helpers and cookie-session request options", () => {

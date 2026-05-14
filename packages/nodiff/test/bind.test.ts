@@ -101,6 +101,69 @@ describe("bind helpers", () => {
     unmount();
   });
 
+  test("binds text, single classes, attribute variants, plain dataset keys, and style resets", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const store = createStore(() => ({
+      label: null as string | null,
+      active: false,
+      flag: false,
+      attr: 7 as unknown,
+      userId: "123" as string | null,
+      style: "display: none; color: red;" as StyleBinding,
+    }));
+
+    const unmount = mount(
+      "#app",
+      jsx("output", {
+        use: [
+          bind.text(store, (state) => state.label),
+          bind.class("active", store, (state) => state.active),
+          bind.attr("data-flag", store, (state) => state.flag),
+          bind.attr("data-value", store, (state) => state.attr),
+          bind.dataset("userId", store, (state) => state.userId),
+          bind.style(store, (state) => state.style),
+        ],
+      }),
+    );
+
+    const output = document.querySelector("output") as HTMLOutputElement;
+    expect(output.textContent).toBe("");
+    expect(output.classList.contains("active")).toBe(false);
+    expect(output.hasAttribute("data-flag")).toBe(false);
+    expect(output.getAttribute("data-value")).toBe("7");
+    expect(output.dataset.userId).toBe("123");
+    expect(output.style.display).toBe("none");
+
+    store.setState({
+      label: "Ready",
+      active: true,
+      flag: true,
+      attr: new Date("2020-01-02T00:00:00.000Z"),
+      userId: null,
+      style: { color: "blue", backgroundColor: null },
+    });
+
+    expect(output.textContent).toBe("Ready");
+    expect(output.classList.contains("active")).toBe(true);
+    expect(output.getAttribute("data-flag")).toBe("");
+    expect(output.getAttribute("data-value")).toBe("2020-01-02T00:00:00.000Z");
+    expect(output.dataset.userId).toBeUndefined();
+    expect(output.style.display).toBe("");
+    expect(output.style.color).toBe("blue");
+
+    store.setState({ attr: { ok: true } });
+    expect(output.getAttribute("data-value")).toBe('{"ok":true}');
+
+    store.setState({ attr: circular });
+    expect(output.getAttribute("data-value")).toBe("[object Object]");
+
+    store.setState({ attr: Symbol("flag") });
+    expect(output.getAttribute("data-value")).toBe("Symbol(flag)");
+
+    unmount();
+  });
+
   test("binds numeric inputs and removes listeners on cleanup", () => {
     const store = createBindingStore();
 
@@ -135,6 +198,74 @@ describe("bind helpers", () => {
     input.value = "9";
     input.dispatchEvent(new InputEvent("input", { bubbles: true }));
     expect(store.getState().age).toBeNull();
+  });
+
+  test("binds string values and checked state with cleanup", () => {
+    const store = createStore(() => ({
+      title: "Initial",
+      accepted: false,
+    }));
+    let valueCommits = 0;
+    let checkedCommits = 0;
+
+    const unmount = mount("#app", [
+      jsx("input", {
+        use: bind.value(
+          store,
+          (state) => state.title,
+          (value) => {
+            valueCommits += 1;
+            if (value === "skip") return;
+            return { title: value.toUpperCase() };
+          },
+          { event: "change" },
+        ),
+      }),
+      jsx("input", {
+        type: "checkbox",
+        use: bind.checked(
+          store,
+          (state) => state.accepted,
+          (checked) => {
+            checkedCommits += 1;
+            if (!checked) return;
+            return { accepted: checked };
+          },
+        ),
+      }),
+    ]);
+
+    const [textInput, checkbox] = Array.from(
+      document.querySelectorAll("input"),
+    ) as HTMLInputElement[];
+    expect(textInput?.value).toBe("Initial");
+    expect(checkbox?.checked).toBe(false);
+
+    textInput!.value = "done";
+    textInput!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(store.getState().title).toBe("DONE");
+
+    textInput!.value = "skip";
+    textInput!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(store.getState().title).toBe("DONE");
+
+    checkbox!.checked = true;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(store.getState().accepted).toBe(true);
+
+    checkbox!.checked = false;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(store.getState().accepted).toBe(true);
+
+    unmount();
+
+    textInput!.value = "late";
+    textInput!.dispatchEvent(new Event("change", { bubbles: true }));
+    checkbox!.checked = true;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(valueCommits).toBe(2);
+    expect(checkedCommits).toBe(2);
   });
 
   test("binds checkbox groups", () => {

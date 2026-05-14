@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
-import { jsx, mount } from "../src/dom";
+import { fragment, jsx, mount } from "../src/dom";
 import { For } from "../src/store";
 import { installDom } from "./test-dom";
 
@@ -116,5 +116,49 @@ describe("For", () => {
         children: (item) => item.label,
       }),
     ).toThrow("Duplicate key in For");
+  });
+
+  test("renders fragment rows and labels unserializable duplicate keys", () => {
+    const items = createStore<{ items: Item[] }>(() => ({
+      items: [{ id: "a", label: "Alpha" }],
+    }));
+
+    const unmount = mount(
+      "#app",
+      For({
+        store: items,
+        each: (state) => state.items,
+        by: (item) => item.id,
+        children: (item) =>
+          fragment([
+            jsx("span", {
+              dataset: { id: item.id },
+              children: item.label,
+            }),
+            "!",
+          ]),
+      }),
+    );
+
+    expect(document.querySelector("#app")?.textContent).toBe("Alpha!");
+    unmount();
+
+    const key: Record<string, unknown> = {};
+    key.self = key;
+    const duplicates = createStore<{ items: Item[] }>(() => ({
+      items: [
+        { id: "a", label: "Alpha" },
+        { id: "b", label: "Beta" },
+      ],
+    }));
+
+    expect(() =>
+      For({
+        store: duplicates,
+        each: (state) => state.items,
+        by: () => key,
+        children: (item) => item.label,
+      }),
+    ).toThrow("Duplicate key in For: [object Object]");
   });
 });
