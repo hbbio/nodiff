@@ -589,8 +589,18 @@ subscribeSelector(store, selector, listener, equality?);
 bind.text(store, selector, format?, equality?);
 bind.attr(name, store, selector, equality?);
 bind.class(name, store, selector, equality?);
+bind.classes(store, selector, equality?);
+bind.style(store, selector, equality?);
+bind.prop(name, store, selector, equality?);
+bind.dataset(name, store, selector, equality?);
+bind.aria(name, store, selector, equality?);
 bind.value(store, selector, commit, options?);
 bind.checked(store, selector, commit, equality?);
+bind.number(store, selector, commit, options?);
+bind.checkedGroup(store, selector, commit, options?);
+bind.radio(store, selector, commit, options?);
+bind.selected(store, selector, commit, equality?);
+bind.files(store, commit);
 ```
 
 Use `text` for inline text nodes. Use `bind.text` when the element already exists and should receive `textContent`. Use `view` for regions. Use `effect` for side effects tied to a node lifecycle.

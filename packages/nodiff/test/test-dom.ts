@@ -19,6 +19,7 @@ const domGlobals = [
   "URLSearchParams",
   "FormData",
   "Blob",
+  "File",
   "Event",
   "MouseEvent",
   "InputEvent",

@@ -99,4 +99,22 @@ describe("DOM runtime", () => {
     expect((node as HTMLElement).innerHTML).toBe("<strong>Trusted</strong>");
     expect(() => jsx("div", { innerHTML: "<strong>nope</strong>" })).toThrow("Use unsafeHTML");
   });
+
+  test("runs actions after children are appended", () => {
+    let childCount = -1;
+
+    const unmount = mount(
+      "#app",
+      jsx("section", {
+        use: (element) => {
+          childCount = element.children.length;
+        },
+        children: [jsx("span", { children: "One" }), jsx("span", { children: "Two" })],
+      }),
+    );
+
+    expect(childCount).toBe(2);
+
+    unmount();
+  });
 });

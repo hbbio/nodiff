@@ -346,6 +346,7 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
 
   const currentProps = props ?? {};
   for (const [name, value] of Object.entries(currentProps)) {
+    if (name === "use") continue;
     applyProp(element, name, value);
   }
 
@@ -355,6 +356,10 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
     currentProps.textContent === undefined
   ) {
     append(element, currentProps.children);
+  }
+
+  if (currentProps.use !== undefined) {
+    applyProp(element, "use", currentProps.use);
   }
 
   return element;

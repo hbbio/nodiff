@@ -14,6 +14,8 @@ export interface WritableStore<T> extends ReadableStore<T> {
 }
 
 export type Selector<TState, TValue> = (state: TState) => TValue;
+export type StyleBinding = string | Record<string, string | number | null | undefined>;
+export type ClassBinding = string | readonly string[] | Record<string, boolean | null | undefined>;
 
 export function subscribeSelector<TState, TValue>(
   store: ReadableStore<TState>,
@@ -392,6 +394,48 @@ function setAttributeValue(element: Element, name: string, value: unknown): void
   }
 }
 
+function cssName(name: string): string {
+  return name.includes("-") ? name : name.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+}
+
+function classSet(value: ClassBinding): Set<string> {
+  if (typeof value === "string") return new Set(value.split(/\s+/).filter(Boolean));
+  if (Array.isArray(value)) return new Set(value.filter(Boolean));
+  return new Set(
+    Object.entries(value)
+      .filter(([, enabled]) => Boolean(enabled))
+      .map(([name]) => name),
+  );
+}
+
+function setDatasetValue(
+  element: HTMLElement,
+  name: string,
+  value: string | number | boolean | null | undefined,
+): void {
+  if (name.includes("-")) {
+    const attr = `data-${name}`;
+    if (value === null || value === undefined || value === false) element.removeAttribute(attr);
+    else element.setAttribute(attr, String(value));
+    return;
+  }
+  if (value === null || value === undefined || value === false) {
+    delete element.dataset[name];
+  } else {
+    element.dataset[name] = String(value);
+  }
+}
+
+function setAriaValue(
+  element: Element,
+  name: string,
+  value: string | number | boolean | null | undefined,
+): void {
+  const attr = name.startsWith("aria-") ? name : `aria-${name}`;
+  if (value === null || value === undefined || value === false) element.removeAttribute(attr);
+  else element.setAttribute(attr, String(value));
+}
+
 export const bind = {
   text<TState, TValue>(
     store: ReadableStore<TState>,
@@ -430,6 +474,113 @@ export const bind = {
   ): Action<Element> {
     return (element) => {
       const sync = (enabled: boolean) => element.classList.toggle(name, enabled);
+      sync(selector(store.getState()));
+      return subscribeSelector(store, selector, sync, equality);
+    };
+  },
+
+  classes<TState>(
+    store: ReadableStore<TState>,
+    selector: Selector<TState, ClassBinding>,
+    equality?: Equality<ClassBinding>,
+  ): Action<Element> {
+    return (element) => {
+      let previous = new Set<string>();
+      const sync = (value: ClassBinding) => {
+        const next = classSet(value);
+        for (const name of previous) {
+          if (!next.has(name)) element.classList.remove(name);
+        }
+        for (const name of next) element.classList.add(name);
+        previous = next;
+      };
+      sync(selector(store.getState()));
+      return subscribeSelector(store, selector, sync, equality);
+    };
+  },
+
+  style<TState>(
+    store: ReadableStore<TState>,
+    selector: Selector<TState, StyleBinding>,
+    equality?: Equality<StyleBinding>,
+  ): Action<HTMLElement | SVGElement> {
+    return (element) => {
+      let previous = new Set<string>();
+      let previousWasString = false;
+      const sync = (value: StyleBinding) => {
+        if (typeof value === "string") {
+          element.style.cssText = value;
+          previous = new Set();
+          previousWasString = true;
+          return;
+        }
+
+        if (previousWasString) {
+          element.style.cssText = "";
+          previousWasString = false;
+        }
+
+        const next = new Set<string>();
+        for (const [rawName, rawValue] of Object.entries(value)) {
+          const name = cssName(rawName);
+          next.add(name);
+          if (rawValue === null || rawValue === undefined) {
+            element.style.removeProperty(name);
+          } else {
+            element.style.setProperty(
+              name,
+              typeof rawValue === "number" ? String(rawValue) : rawValue,
+            );
+          }
+        }
+        for (const name of previous) {
+          if (!next.has(name)) element.style.removeProperty(name);
+        }
+        previous = next;
+      };
+      sync(selector(store.getState()));
+      return subscribeSelector(store, selector, sync, equality);
+    };
+  },
+
+  prop<TState, TValue, TElement extends Element = Element>(
+    name: string,
+    store: ReadableStore<TState>,
+    selector: Selector<TState, TValue>,
+    equality?: Equality<TValue>,
+  ): Action<TElement> {
+    return (element) => {
+      const sync = (value: TValue) => {
+        (element as unknown as Record<string, unknown>)[name] = value;
+      };
+      sync(selector(store.getState()));
+      return subscribeSelector(store, selector, sync, equality);
+    };
+  },
+
+  dataset<TState>(
+    name: string,
+    store: ReadableStore<TState>,
+    selector: Selector<TState, string | number | boolean | null | undefined>,
+    equality?: Equality<string | number | boolean | null | undefined>,
+  ): Action<HTMLElement> {
+    return (element) => {
+      const sync = (value: string | number | boolean | null | undefined) =>
+        setDatasetValue(element, name, value);
+      sync(selector(store.getState()));
+      return subscribeSelector(store, selector, sync, equality);
+    };
+  },
+
+  aria<TState>(
+    name: string,
+    store: ReadableStore<TState>,
+    selector: Selector<TState, string | number | boolean | null | undefined>,
+    equality?: Equality<string | number | boolean | null | undefined>,
+  ): Action<Element> {
+    return (element) => {
+      const sync = (value: string | number | boolean | null | undefined) =>
+        setAriaValue(element, name, value);
       sync(selector(store.getState()));
       return subscribeSelector(store, selector, sync, equality);
     };
@@ -489,6 +640,146 @@ export const bind = {
         unsubscribe();
         element.removeEventListener("change", handler);
       };
+    };
+  },
+
+  number<TState, TValue>(
+    store: WritableStore<TState>,
+    selector: Selector<TState, TValue>,
+    commit: (value: number | null, state: TState) => Partial<TState> | TState | void,
+    options: {
+      event?: "input" | "change";
+      format?: (value: TValue) => string;
+      equality?: Equality<TValue>;
+    } = {},
+  ): Action<HTMLInputElement> {
+    return (element) => {
+      const format =
+        options.format ??
+        ((value: TValue) => (value === null || value === undefined ? "" : String(value)));
+      const sync = (value: TValue) => {
+        const next = format(value);
+        if (element.value !== next) element.value = next;
+      };
+      sync(selector(store.getState()));
+      const unsubscribe = subscribeSelector(store, selector, sync, options.equality);
+      const eventName = options.event ?? "input";
+      const handler = () => {
+        const raw = element.value.trim();
+        const next = raw === "" ? null : Number(raw);
+        const patch = commit(Number.isNaN(next) ? null : next, store.getState());
+        if (patch !== undefined) store.setState(patch);
+      };
+      element.addEventListener(eventName, handler);
+      return () => {
+        unsubscribe();
+        element.removeEventListener(eventName, handler);
+      };
+    };
+  },
+
+  checkedGroup<TState, TValue extends string = string>(
+    store: WritableStore<TState>,
+    selector: Selector<TState, readonly TValue[]>,
+    commit: (values: TValue[], state: TState) => Partial<TState> | TState | void,
+    options: {
+      value?: TValue;
+      equality?: Equality<readonly TValue[]>;
+    } = {},
+  ): Action<HTMLInputElement> {
+    return (element) => {
+      const readValue = () => options.value ?? (element.value as TValue);
+      const sync = (values: readonly TValue[]) => {
+        element.checked = values.includes(readValue());
+      };
+      sync(selector(store.getState()));
+      const unsubscribe = subscribeSelector(store, selector, sync, options.equality);
+      const handler = () => {
+        const selected = new Set(selector(store.getState()));
+        const value = readValue();
+        if (element.checked) selected.add(value);
+        else selected.delete(value);
+        const patch = commit(Array.from(selected), store.getState());
+        if (patch !== undefined) store.setState(patch);
+      };
+      element.addEventListener("change", handler);
+      return () => {
+        unsubscribe();
+        element.removeEventListener("change", handler);
+      };
+    };
+  },
+
+  radio<TState, TValue extends string | number | boolean = string>(
+    store: WritableStore<TState>,
+    selector: Selector<TState, TValue>,
+    commit: (value: TValue, state: TState) => Partial<TState> | TState | void,
+    options: {
+      value?: TValue;
+      equality?: Equality<TValue>;
+    } = {},
+  ): Action<HTMLInputElement> {
+    return (element) => {
+      const readValue = () => options.value ?? (element.value as TValue);
+      const sync = (value: TValue) => {
+        element.checked = Object.is(value, readValue());
+      };
+      sync(selector(store.getState()));
+      const unsubscribe = subscribeSelector(store, selector, sync, options.equality);
+      const handler = () => {
+        if (!element.checked) return;
+        const patch = commit(readValue(), store.getState());
+        if (patch !== undefined) store.setState(patch);
+      };
+      element.addEventListener("change", handler);
+      return () => {
+        unsubscribe();
+        element.removeEventListener("change", handler);
+      };
+    };
+  },
+
+  selected<TState, TValue extends string = string>(
+    store: WritableStore<TState>,
+    selector: Selector<TState, readonly TValue[]>,
+    commit: (values: TValue[], state: TState) => Partial<TState> | TState | void,
+    equality?: Equality<readonly TValue[]>,
+  ): Action<HTMLSelectElement> {
+    return (element) => {
+      const sync = (values: readonly TValue[]) => {
+        const selected = new Set<string>(values.map(String));
+        for (const option of Array.from(element.options)) {
+          option.selected = selected.has(option.value);
+        }
+      };
+      sync(selector(store.getState()));
+      const unsubscribe = subscribeSelector(store, selector, sync, equality);
+      const handler = () => {
+        const values = Array.from(element.options)
+          .filter((option) => option.selected)
+          .map((option) => option.value as TValue);
+        const patch = commit(values, store.getState());
+        if (patch !== undefined) store.setState(patch);
+      };
+      element.addEventListener("change", handler);
+      return () => {
+        unsubscribe();
+        element.removeEventListener("change", handler);
+      };
+    };
+  },
+
+  files<TState>(
+    store: WritableStore<TState>,
+    commit: (files: FileList | null, state: TState) => Partial<TState> | TState | void,
+  ): Action<HTMLInputElement> {
+    return (element) => {
+      const handler = () => {
+        const patch = commit(element.files, store.getState());
+        if (patch !== undefined) store.setState(patch);
+      };
+      element.addEventListener("change", handler);
+      return () => element.removeEventListener("change", handler);
     };
   },
 };
