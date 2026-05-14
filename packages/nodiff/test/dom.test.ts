@@ -142,6 +142,11 @@ describe("DOM runtime", () => {
     expect(() => jsx("a", { href: "javascript:alert(1)", children: "Bad" })).toThrow(
       "disallowed scheme",
     );
+    expect(() =>
+      jsx("img", {
+        srcset: "/safe.png 1x, javascript:alert(1) 2x",
+      }),
+    ).toThrow("disallowed scheme");
     expect(() => jsx("button", { onClick: "alert(1)", children: "Bad" })).toThrow(
       "must be a function",
     );
@@ -171,9 +176,15 @@ describe("DOM runtime", () => {
     });
 
     expect(() => jsx("a", { href: "/local", children: "Local" })).not.toThrow();
+    expect(() => jsx("img", { srcset: "/local.png 1x, /large.png 2x" })).not.toThrow();
     expect(() => jsx("img", { src: "https://cdn.example.test/image.png" })).toThrow(
       "disallowed origin",
     );
+    expect(() =>
+      jsx("img", {
+        srcset: "/local.png 1x, https://cdn.example.test/image.png 2x",
+      }),
+    ).toThrow("disallowed origin");
   });
 
   test("runs actions after children are appended", () => {

@@ -471,6 +471,48 @@ function safeUrlAttributeValue(element: Element, name: string, value: string): s
   return value;
 }
 
+function isSrcsetSpace(value: string): boolean {
+  return value === " " || value === "\n" || value === "\t" || value === "\r" || value === "\f";
+}
+
+function srcsetCandidateUrls(value: string): string[] {
+  const urls: string[] = [];
+  let index = 0;
+
+  while (index < value.length) {
+    while (index < value.length && (isSrcsetSpace(value[index] ?? "") || value[index] === ",")) {
+      index += 1;
+    }
+
+    const start = index;
+    while (index < value.length && !isSrcsetSpace(value[index] ?? "")) index += 1;
+
+    let token = value.slice(start, index);
+    if (!token) break;
+
+    const endedAtComma = token.endsWith(",");
+    if (endedAtComma) token = token.replace(/,+$/, "");
+
+    if (token.toLowerCase().startsWith("data:") || !token.includes(",")) {
+      urls.push(token);
+    } else {
+      urls.push(...token.split(",").filter(Boolean));
+    }
+
+    if (!endedAtComma) {
+      while (index < value.length && value[index] !== ",") index += 1;
+    }
+  }
+
+  return urls;
+}
+
+function validateSrcsetAttributeValue(element: Element, name: string, value: string): void {
+  for (const url of srcsetCandidateUrls(value)) {
+    safeUrlAttributeValue(element, name, url);
+  }
+}
+
 export function validateAttributeValue(element: Element, name: string, value: string): void {
   const normalized = name.toLowerCase();
   if (rawHtmlSinkAttributes.has(normalized)) {
@@ -480,6 +522,7 @@ export function validateAttributeValue(element: Element, name: string, value: st
     reportDomViolation(`Event handler attributes are not supported: ${name}.`, value);
   }
   if (normalized === "style") assertSafeCssValue(value, "style attribute");
+  if (normalized === "srcset") validateSrcsetAttributeValue(element, normalized, value);
   if (urlAttributes.has(normalized)) safeUrlAttributeValue(element, normalized, value);
 }
 

@@ -527,11 +527,11 @@ describe("bind helpers", () => {
   test("blocks unsafe URL and CSS values in bindings", () => {
     const store = createStore(() => ({
       href: "https://example.test",
+      srcset: "/small.png 1x, /large.png 2x",
       style: { color: "green" } as StyleBinding,
     }));
 
-    const unmount = mount(
-      "#app",
+    const unmount = mount("#app", [
       jsx("a", {
         use: [
           bind.attr("href", store, (state) => state.href),
@@ -539,13 +539,21 @@ describe("bind helpers", () => {
         ],
         children: "Safe",
       }),
-    );
+      jsx("img", {
+        use: bind.attr("srcset", store, (state) => state.srcset),
+      }),
+    ]);
 
     const link = document.querySelector("a") as HTMLAnchorElement;
+    const image = document.querySelector("img") as HTMLImageElement;
     expect(link.href).toBe("https://example.test/");
+    expect(image.getAttribute("srcset")).toBe("/small.png 1x, /large.png 2x");
     expect(link.style.color).toBe("green");
 
     expect(() => store.setState({ href: "javascript:alert(1)" })).toThrow("disallowed scheme");
+    expect(() => store.setState({ srcset: "/safe.png 1x, javascript:alert(1) 2x" })).toThrow(
+      "disallowed scheme",
+    );
     expect(() =>
       store.setState({ style: { backgroundImage: "url(javascript:alert(1))" } }),
     ).toThrow("unsafe CSS");
@@ -584,6 +592,15 @@ describe("bind helpers", () => {
     expect(() => store.setState({ props: { onclick: "alert(1)" } })).toThrow(
       "Event handler attributes",
     );
+    expect(() =>
+      store.setState({
+        props: {
+          attributes: {
+            srcset: "/safe.png 1x, javascript:alert(1) 2x",
+          },
+        },
+      }),
+    ).toThrow("disallowed scheme");
 
     unmount();
   });
