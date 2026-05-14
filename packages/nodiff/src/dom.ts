@@ -371,18 +371,31 @@ const svgTags = new Set([
   "use",
 ]);
 
-const blockedElementTags = new Set(["script", "iframe", "object", "embed"]);
-const rawHtmlSanitizerBlockedTags = new Set([...blockedElementTags, "link", "meta"]);
-const rawHtmlSinkAttributes = new Set(["innerhtml", "outerhtml", "srcdoc"]);
-const urlAttributes = new Set([
-  "href",
-  "src",
-  "action",
-  "formaction",
-  "poster",
-  "cite",
-  "xlink:href",
-]);
+export const DOM_SINK_POLICY = {
+  blockedElementTags: ["script", "iframe", "object", "embed"],
+  rawHtmlSanitizerElementTags: ["script", "iframe", "object", "embed", "link", "meta"],
+  rawHtmlProperties: ["innerhtml", "outerhtml", "srcdoc"],
+  singleUrlAttributes: [
+    "href",
+    "src",
+    "action",
+    "formaction",
+    "poster",
+    "cite",
+    "xlink:href",
+    "xlinkhref",
+  ],
+  urlListAttributes: ["srcset"],
+  cssAttributes: ["style"],
+  eventAttributePrefix: "on",
+} as const;
+
+const blockedElementTags = new Set<string>(DOM_SINK_POLICY.blockedElementTags);
+const rawHtmlSanitizerBlockedTags = new Set<string>(DOM_SINK_POLICY.rawHtmlSanitizerElementTags);
+const rawHtmlSinkAttributes = new Set<string>(DOM_SINK_POLICY.rawHtmlProperties);
+const singleUrlAttributes = new Set<string>(DOM_SINK_POLICY.singleUrlAttributes);
+const urlListAttributes = new Set<string>(DOM_SINK_POLICY.urlListAttributes);
+const cssAttributes = new Set<string>(DOM_SINK_POLICY.cssAttributes);
 
 function isIterable(value: unknown): value is Iterable<Child> {
   return typeof value === "object" && value !== null && Symbol.iterator in value;
@@ -518,12 +531,12 @@ export function validateAttributeValue(element: Element, name: string, value: st
   if (rawHtmlSinkAttributes.has(normalized)) {
     reportDomViolation(`Raw HTML DOM sink is not supported: ${name}.`, value);
   }
-  if (normalized.startsWith("on")) {
+  if (normalized.startsWith(DOM_SINK_POLICY.eventAttributePrefix)) {
     reportDomViolation(`Event handler attributes are not supported: ${name}.`, value);
   }
-  if (normalized === "style") assertSafeCssValue(value, "style attribute");
-  if (normalized === "srcset") validateSrcsetAttributeValue(element, normalized, value);
-  if (urlAttributes.has(normalized)) safeUrlAttributeValue(element, normalized, value);
+  if (cssAttributes.has(normalized)) assertSafeCssValue(value, "style attribute");
+  if (urlListAttributes.has(normalized)) validateSrcsetAttributeValue(element, normalized, value);
+  if (singleUrlAttributes.has(normalized)) safeUrlAttributeValue(element, normalized, value);
 }
 
 function assertSafeElementType(type: string): void {
