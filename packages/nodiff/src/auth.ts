@@ -31,6 +31,7 @@ export type AuthOptions<TToken extends AuthToken> = {
   storageKey?: string;
   tokenSchema?: z.ZodType<TToken>;
   persist?: boolean;
+  allowRefreshTokenPersistence?: boolean;
 };
 
 export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken>(
@@ -49,6 +50,10 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
   function readSavedToken(): TToken | null {
     const savedToken = cache.get<TToken>(storageKey, schema)?.value ?? null;
     if (!savedToken) return null;
+    if (savedToken.refreshToken && !options.allowRefreshTokenPersistence) {
+      cache.remove(storageKey);
+      return null;
+    }
     if (tokenExpired(savedToken)) {
       cache.remove(storageKey);
       return null;
@@ -63,6 +68,9 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
     user: null,
     status: savedToken ? "authenticated" : "anonymous",
     setToken: (token, user) => {
+      if (persist && token.refreshToken && !options.allowRefreshTokenPersistence) {
+        throw new Error("Refusing to persist a refresh token without explicit opt-in.");
+      }
       if (tokenExpired(token)) {
         set({ token: null, user: null, status: "anonymous" });
         return;
@@ -103,9 +111,22 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
     return activeToken()?.accessToken ?? null;
   }
 
+  function requireToken(): TToken {
+    const token = activeToken();
+    if (!token) throw new Error("Authentication token is required.");
+    return token;
+  }
+
   function authHeaders(): HeadersInit {
     const token = activeToken();
     if (!token) return {};
+    return {
+      Authorization: `${token.tokenType ?? "Bearer"} ${token.accessToken}`,
+    };
+  }
+
+  function requiredHeaders(): HeadersInit {
+    const token = requireToken();
     return {
       Authorization: `${token.tokenType ?? "Bearer"} ${token.accessToken}`,
     };
@@ -124,7 +145,9 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
   return {
     store,
     getToken,
+    requireToken,
     authHeaders,
+    requiredHeaders,
     isExpired,
     isAuthenticated,
     setToken: (token: TToken, user?: TUser | null) => store.getState().setToken(token, user),
@@ -136,3 +159,11 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
 export type AuthController<TUser = unknown, TToken extends AuthToken = AuthToken> = ReturnType<
   typeof createAuth<TUser, TToken>
 >;
+
+export function cookieSessionRequest() {
+  return {
+    auth: "required" as const,
+    credentials: "include" as const,
+    csrf: true as const,
+  };
+}

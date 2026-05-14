@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mount } from "../src/dom";
-import { createRouter } from "../src/router";
+import { createRouter, guardedRoute } from "../src/router";
 import { installDom } from "./test-dom";
 
 describe("router", () => {
@@ -166,6 +166,36 @@ describe("router", () => {
     expect(document.querySelector("#app")?.textContent).toContain("Docs:guides/setup");
     expect(document.querySelector("a")?.classList.contains("active")).toBe(true);
     expect(window.location.pathname).toBe("/docs/guides/setup");
+
+    unmount();
+    stop();
+  });
+
+  test("guards routes with fallback UI", () => {
+    let authenticated = false;
+    const router = createRouter(
+      [
+        {
+          path: "/account",
+          component: guardedRoute(
+            () => authenticated,
+            () => "Account",
+            () => "Login required",
+          ),
+        },
+      ],
+      { mode: "hash" },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", router.outlet());
+
+    router.navigate("/account");
+    expect(document.querySelector("#app")?.textContent).toBe("Login required");
+
+    authenticated = true;
+    router.navigate("/account?refresh=1");
+    expect(document.querySelector("#app")?.textContent).toBe("Account");
 
     unmount();
     stop();

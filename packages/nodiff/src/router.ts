@@ -50,6 +50,8 @@ export type Router<TMeta = unknown> = {
   Link(props: LinkProps): Child;
 };
 
+export type RouteGuard<TMeta = unknown> = (context: RouteContext<TMeta>) => boolean;
+
 type CompiledRoute<TMeta> = {
   route: RouteDefinition<TMeta>;
   keys: string[];
@@ -168,6 +170,14 @@ function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): Rout
     query,
     match: null,
   };
+}
+
+export function guardedRoute<TMeta = unknown>(
+  guard: RouteGuard<TMeta>,
+  component: RouteDefinition<TMeta>["component"],
+  fallback: (context: RouteContext<TMeta>) => Child = () => null,
+): RouteDefinition<TMeta>["component"] {
+  return (context) => (guard(context) ? component(context) : fallback(context));
 }
 
 export function createRouter<TMeta = unknown>(
