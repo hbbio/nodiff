@@ -1,6 +1,6 @@
-import { ErrorBoundary, mount } from "@nodiffjs/core";
+import { catchRender, mount } from "@nodiffjs/core";
 import { App, router } from "./app";
 import "./styles.css";
 
 router.start();
-mount("#app", ErrorBoundary({ children: App }));
+mount("#app", catchRender({ render: App }));

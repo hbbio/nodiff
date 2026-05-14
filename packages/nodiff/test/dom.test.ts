@@ -3,6 +3,7 @@ import { createStore } from "zustand/vanilla";
 import {
   ErrorBoundary,
   Fragment,
+  catchRender,
   fragment,
   jsx,
   mount,
@@ -302,7 +303,7 @@ describe("DOM runtime", () => {
     unmount();
   });
 
-  test("error boundaries render successful children without security reports", () => {
+  test("catchRender renders successful children without security reports", () => {
     const violations: SecurityViolation[] = [];
     configureSecurityPolicy({
       onViolation: (violation) => violations.push(violation),
@@ -310,8 +311,8 @@ describe("DOM runtime", () => {
 
     const unmount = mount(
       "#app",
-      ErrorBoundary({
-        children: () => jsx("strong", { children: "Ready" }),
+      catchRender({
+        render: () => jsx("strong", { children: "Ready" }),
       }),
     );
 
@@ -321,7 +322,7 @@ describe("DOM runtime", () => {
     unmount();
   });
 
-  test("error boundaries catch render exceptions without leaking details", () => {
+  test("catchRender catches render exceptions without leaking details", () => {
     const violations: SecurityViolation[] = [];
     const seen: string[] = [];
     configureSecurityPolicy({
@@ -331,8 +332,8 @@ describe("DOM runtime", () => {
 
     const unmount = mount(
       "#app",
-      ErrorBoundary({
-        children: () => {
+      catchRender({
+        render: () => {
           throw secretError;
         },
         onError: (error) => seen.push(error.message),
@@ -350,6 +351,26 @@ describe("DOM runtime", () => {
         value: "Error",
       },
     ]);
+
+    unmount();
+  });
+
+  test("ErrorBoundary supports render props, function children, and direct children", () => {
+    const renderProp = ErrorBoundary({
+      render: () => jsx("strong", { children: "Render prop" }),
+    });
+    const functionChild = ErrorBoundary({
+      children: () => jsx("em", { children: "Function child" }),
+    });
+    const directChild = jsx("span", { children: "Already rendered" });
+
+    expect(ErrorBoundary({ children: directChild })).toBe(directChild);
+
+    const unmount = mount("#app", [renderProp, functionChild, directChild]);
+
+    expect(document.querySelector("#app")?.textContent).toBe(
+      "Render propFunction childAlready rendered",
+    );
 
     unmount();
   });

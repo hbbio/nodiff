@@ -195,7 +195,7 @@ NoDiff tries to make the safe path the short path for rich-client apps:
   CSRF headers.
 - `createAuth(...)` keeps tokens in memory by default. localStorage persistence is explicit, and
   refresh-token persistence requires a second explicit opt in.
-- `ErrorBoundary` and router `error`/`onError` hooks render redacted failures by default, so route
+- `catchRender` and router `error`/`onError` hooks render redacted failures by default, so route
   exceptions do not become stack traces or secret-bearing messages in the UI.
 - `contentSecurityPolicy(...)` and `securityHeaders(...)` produce strict server headers that match
   the same policy model.
@@ -631,6 +631,7 @@ jsx(type, props);
 jsxs(type, props);
 jsxDEV(type, props);
 Fragment(props);
+catchRender({ render, fallback?, onError? });
 ErrorBoundary(props);
 mount(host, componentOrNode, props?);
 append(parent, child);
@@ -660,6 +661,17 @@ Raw HTML must use `unsafeHTML` with `trustedHTML(...)` or `sanitizeHTML(...)`. T
 `innerHTML` prop is rejected so HTML injection is visible at the call site.
 
 Events are inferred from `onX` prop names. `onClick` maps to `click`, `onInput` maps to `input`, and so on.
+
+Use `catchRender({ render })` around app shells or isolated render callbacks:
+
+```tsx
+mount("#app", catchRender({ render: App }));
+```
+
+It only catches exceptions thrown while the `render` callback runs. Already-created JSX children are
+evaluated before a boundary function receives them, so `ErrorBoundary({ children: <App /> })` cannot
+catch `App` render errors. `ErrorBoundary({ render: App })` and function children are kept for
+compatibility, but new code should prefer `catchRender`.
 
 ### Store bindings
 

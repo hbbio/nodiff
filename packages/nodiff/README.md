@@ -16,7 +16,7 @@ This package is designed for a fork-first monorepo workflow. In this repository,
 ```
 
 ```tsx
-import { mount, text } from "@nodiffjs/core";
+import { catchRender, mount, text } from "@nodiffjs/core";
 import { createStore } from "zustand/vanilla";
 
 const counter = createStore(() => ({ count: 0 }));
@@ -29,7 +29,7 @@ function App() {
   );
 }
 
-mount("#app", App);
+mount("#app", catchRender({ render: App }));
 ```
 
 ## Package Entries

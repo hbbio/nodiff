@@ -9,11 +9,20 @@ export type Component<P extends object = Record<string, unknown>> = (
 ) => Child;
 export type Ref<T extends Node = Node> = ((node: T) => void) | { current: T | null };
 export type Action<T extends Element = Element> = (element: T) => void | (() => void);
-export type ErrorBoundaryProps = {
-  children: Child | (() => Child);
-  fallback?: Child | ((error: Error) => Child);
+type ErrorFallback = Child | ((error: Error) => Child);
+type ErrorBoundaryHooks = {
+  fallback?: ErrorFallback;
   onError?: (error: Error) => void;
 };
+export type CatchRenderProps = ErrorBoundaryHooks & {
+  render: () => Child;
+};
+export type ErrorBoundaryProps =
+  | CatchRenderProps
+  | (ErrorBoundaryHooks & {
+      children: Child | (() => Child);
+      render?: never;
+    });
 
 type EventPair = [EventListenerOrEventListenerObject, AddEventListenerOptions?];
 const trustedHTMLMarker = Symbol("nodiff:trustedHTML");
@@ -785,9 +794,9 @@ function defaultErrorFallback(error: Error): HTMLElement {
   return element;
 }
 
-export function ErrorBoundary(props: ErrorBoundaryProps): Child {
+function renderWithBoundary(props: ErrorBoundaryHooks, render: () => Child): Child {
   try {
-    return typeof props.children === "function" ? props.children() : props.children;
+    return render();
   } catch (caught) {
     const error = toError(caught);
     props.onError?.(error);
@@ -795,6 +804,16 @@ export function ErrorBoundary(props: ErrorBoundaryProps): Child {
     if (props.fallback === undefined) return defaultErrorFallback(error);
     return typeof props.fallback === "function" ? props.fallback(error) : props.fallback;
   }
+}
+
+export function catchRender(props: CatchRenderProps): Child {
+  return renderWithBoundary(props, props.render);
+}
+
+export function ErrorBoundary(props: ErrorBoundaryProps): Child {
+  if (props.render) return catchRender(props);
+  if (typeof props.children === "function") return renderWithBoundary(props, props.children);
+  return props.children;
 }
 
 export function mount(

@@ -49,7 +49,7 @@ describe("security baseline", () => {
     expect(state).toContain("security: securityPolicy");
     expect(state).toContain("readDemoCsrfToken");
     expect(app).toContain("error: RouteError");
-    expect(main).toContain("ErrorBoundary");
+    expect(main).toContain("catchRender");
   });
 
   test("keeps public API reads isolated from demo auth headers", () => {
