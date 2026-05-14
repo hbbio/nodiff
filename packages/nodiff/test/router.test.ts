@@ -39,6 +39,33 @@ describe("router", () => {
     stop();
   });
 
+  test("falls back instead of throwing on malformed encoded params", () => {
+    window.location.hash = "#/posts/%E0%A4%A";
+
+    const router = createRouter(
+      [
+        {
+          path: "/posts/:id",
+          component: (context) => `Post:${context.params.id}`,
+        },
+      ],
+      {
+        mode: "hash",
+        fallback: (state) => `Missing:${state.pathname}`,
+      },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", router.outlet());
+
+    expect(document.querySelector("#app")?.textContent).toBe("Missing:/posts/%E0%A4%A");
+    expect(() => router.navigate("/posts/%E0%A4%A")).not.toThrow();
+    expect(document.querySelector("#app")?.textContent).toBe("Missing:/posts/%E0%A4%A");
+
+    unmount();
+    stop();
+  });
+
   test("links navigate without reloading and toggle active class", () => {
     const router = createRouter(
       [

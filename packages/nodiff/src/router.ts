@@ -97,6 +97,14 @@ function pathWithQuery(pathname: string, query: URLSearchParams): string {
   return `${pathname}${search ? `?${search}` : ""}`;
 }
 
+function decodeRouteParam(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 function canonicalPathname(pathname: string): string {
   return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
@@ -129,9 +137,16 @@ function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): Rout
     if (!match) continue;
 
     const params: Record<string, string> = {};
+    let validParams = true;
     item.keys.forEach((key, index) => {
-      params[key] = decodeURIComponent(match[index + 1] ?? "");
+      const decoded = decodeRouteParam(match[index + 1] ?? "");
+      if (decoded === null) {
+        validParams = false;
+        return;
+      }
+      params[key] = decoded;
     });
+    if (!validParams) continue;
 
     return {
       path: pathWithQuery(pathname, query),
