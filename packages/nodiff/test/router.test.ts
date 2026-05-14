@@ -68,4 +68,79 @@ describe("router", () => {
     unmount();
     stop();
   });
+
+  test("matches active links on path segments, trailing slashes, and query intent", () => {
+    const router = createRouter(
+      [
+        { path: "/", component: () => "Home" },
+        { path: "/post", component: () => "Post" },
+        { path: "/posts", component: () => "Posts" },
+        { path: "/posts/:id", component: () => "Post detail" },
+      ],
+      { mode: "hash" },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", [
+      router.Link({ to: "/post", activeClass: "active-post", children: "Post" }),
+      router.Link({ to: "/posts", activeClass: "active-posts", children: "Posts" }),
+      router.Link({ to: "/posts", exact: true, activeClass: "active-exact", children: "Exact" }),
+      router.Link({
+        to: "/posts?tab=comments",
+        activeClass: "active-query",
+        children: "Comments",
+      }),
+    ]);
+
+    const [postLink, postsLink, exactLink, queryLink] = Array.from(document.querySelectorAll("a"));
+
+    router.navigate("/posts");
+    expect(postLink?.classList.contains("active-post")).toBe(false);
+    expect(postsLink?.classList.contains("active-posts")).toBe(true);
+    expect(exactLink?.classList.contains("active-exact")).toBe(true);
+    expect(queryLink?.classList.contains("active-query")).toBe(false);
+
+    router.navigate("/posts/");
+    expect(exactLink?.classList.contains("active-exact")).toBe(true);
+
+    router.navigate("/posts/42");
+    expect(postsLink?.classList.contains("active-posts")).toBe(true);
+    expect(exactLink?.classList.contains("active-exact")).toBe(false);
+
+    router.navigate("/posts?tab=comments");
+    expect(queryLink?.classList.contains("active-query")).toBe(true);
+    expect(exactLink?.classList.contains("active-exact")).toBe(true);
+
+    router.navigate("/post");
+    expect(postLink?.classList.contains("active-post")).toBe(true);
+    expect(postsLink?.classList.contains("active-posts")).toBe(false);
+
+    unmount();
+    stop();
+  });
+
+  test("matches wildcard routes in history mode", () => {
+    const router = createRouter(
+      [
+        { path: "/", component: () => "Home" },
+        { path: "/docs/*", component: (context) => `Docs:${context.params.wildcard}` },
+      ],
+      { mode: "history" },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", [
+      router.Link({ to: "/docs", activeClass: "active", children: "Docs" }),
+      router.outlet(),
+    ]);
+
+    router.navigate("/docs/guides/setup");
+
+    expect(document.querySelector("#app")?.textContent).toContain("Docs:guides/setup");
+    expect(document.querySelector("a")?.classList.contains("active")).toBe(true);
+    expect(window.location.pathname).toBe("/docs/guides/setup");
+
+    unmount();
+    stop();
+  });
 });

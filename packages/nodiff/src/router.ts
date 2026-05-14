@@ -92,6 +92,35 @@ function parsePath(path: string): { pathname: string; query: URLSearchParams } {
   return { pathname: url.pathname || "/", query: url.searchParams };
 }
 
+function pathWithQuery(pathname: string, query: URLSearchParams): string {
+  const search = query.toString();
+  return `${pathname}${search ? `?${search}` : ""}`;
+}
+
+function canonicalPathname(pathname: string): string {
+  return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
+function matchesPathSegment(pathname: string, targetPathname: string): boolean {
+  const current = canonicalPathname(pathname);
+  const target = canonicalPathname(targetPathname);
+  if (target === "/") return pathname === "/";
+  return current === target || current.startsWith(`${target}/`);
+}
+
+function isActivePath(state: RouterState, to: string, exact: boolean | undefined): boolean {
+  const target = parsePath(to);
+  const targetQuery = target.query.toString();
+
+  if (exact) {
+    if (targetQuery) return state.path === pathWithQuery(target.pathname, target.query);
+    return canonicalPathname(state.pathname) === canonicalPathname(target.pathname);
+  }
+
+  if (!matchesPathSegment(state.pathname, target.pathname)) return false;
+  return targetQuery ? state.query.toString() === targetQuery : true;
+}
+
 function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): RouterState<TMeta> {
   const { pathname, query } = parsePath(path);
 
@@ -105,11 +134,11 @@ function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): Rout
     });
 
     return {
-      path: `${pathname}${query.toString() ? `?${query.toString()}` : ""}`,
+      path: pathWithQuery(pathname, query),
       pathname,
       query,
       match: {
-        path: `${pathname}${query.toString() ? `?${query.toString()}` : ""}`,
+        path: pathWithQuery(pathname, query),
         pathname,
         query,
         params,
@@ -119,7 +148,7 @@ function routeMatch<TMeta>(compiled: CompiledRoute<TMeta>[], path: string): Rout
   }
 
   return {
-    path: `${pathname}${query.toString() ? `?${query.toString()}` : ""}`,
+    path: pathWithQuery(pathname, query),
     pathname,
     query,
     match: null,
@@ -210,10 +239,7 @@ export function createRouter<TMeta = unknown>(
       const { to, replace, activeClass, exact, children, onClick, use, ...rest } = props;
       const active: Action<HTMLAnchorElement> | undefined = activeClass
         ? (element) => {
-            const select = (state: RouterState<TMeta>) =>
-              exact
-                ? state.path === normalizePath(to)
-                : state.pathname.startsWith(parsePath(to).pathname);
+            const select = (state: RouterState<TMeta>) => isActivePath(state, to, exact);
             const syncActive = (enabled: boolean) => element.classList.toggle(activeClass, enabled);
             syncActive(select(store.getState()));
             return subscribeSelector(store, select, syncActive);
