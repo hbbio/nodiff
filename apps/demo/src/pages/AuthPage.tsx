@@ -4,44 +4,61 @@ import { auth, fakeLogin, LoginSchema } from "../state";
 
 function AuthOverview() {
   return (
-    <section class="grid">
-      <article
-        class="panel summary-panel"
+    <section class="stats stats-vertical bg-base-100 shadow-sm md:stats-horizontal">
+      <div
+        class="stat"
         use={bind.classes(auth.store, (state) => ({
-          authenticated: state.status === "authenticated",
+          "text-success": state.status === "authenticated",
         }))}
       >
-        <div class="stat-card-top">
-          <span>Session</span>
+        <div class="flex items-start justify-between gap-3">
+          <div class="stat-title">Session</div>
           <Badge>{text(auth.store, (state) => state.status)}</Badge>
         </div>
-        <strong>{text(auth.store, (state) => state.user?.name ?? "guest")}</strong>
-        <small>Stored token state is ordinary zustand data.</small>
-      </article>
-      <article class="panel summary-panel">
-        <div class="stat-card-top">
-          <span>Authorization</span>
+        <div class="stat-value text-3xl">
+          {text(auth.store, (state) => state.user?.name ?? "guest")}
+        </div>
+        <div class="stat-desc">Stored token state is ordinary zustand data.</div>
+      </div>
+      <div class="stat">
+        <div class="flex items-start justify-between gap-3">
+          <div class="stat-title">Authorization</div>
           <Badge>{text(auth.store, (state) => (state.token ? "ready" : "empty"))}</Badge>
         </div>
-        <strong>{text(auth.store, (state) => state.token?.tokenType ?? "Bearer")}</strong>
-        <small>The API client reads headers from this controller.</small>
-      </article>
+        <div class="stat-value text-3xl">
+          {text(auth.store, (state) => state.token?.tokenType ?? "Bearer")}
+        </div>
+        <div class="stat-desc">The API client reads headers from this controller.</div>
+      </div>
     </section>
   );
 }
 
 function LoginPanel() {
   return (
-    <form class="panel stack compact" use={zodSubmit(LoginSchema, fakeLogin)}>
-      <label class="field">
-        <span>Email</span>
-        <input name="email" type="email" value="demo@example.com" autocomplete="email" />
-      </label>
-      <label class="field">
-        <span>Password</span>
-        <input name="password" type="password" value="demo" autocomplete="current-password" />
-      </label>
-      <button type="submit">Create demo token</button>
+    <form use={zodSubmit(LoginSchema, fakeLogin)}>
+      <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
+        <legend class="fieldset-legend">Login</legend>
+        <label class="label">Email</label>
+        <input
+          class="input w-full"
+          name="email"
+          type="email"
+          value="demo@example.com"
+          autocomplete="email"
+        />
+        <label class="label">Password</label>
+        <input
+          class="input w-full"
+          name="password"
+          type="password"
+          value="demo"
+          autocomplete="current-password"
+        />
+        <button class="btn btn-primary mt-4" type="submit">
+          Create demo token
+        </button>
+      </fieldset>
     </form>
   );
 }
@@ -52,26 +69,30 @@ function AuthenticatedPanel() {
   const expiresAt = token?.expiresAt ? new Date(token.expiresAt).toLocaleString() : "session";
 
   return (
-    <section class="panel stack compact">
-      <div class="split">
-        <div>
-          <h2>Authenticated</h2>
-          <p class="muted">Token preview: {tokenPreview}</p>
-          <p class="muted">Expires: {expiresAt}</p>
+    <section class="card card-border bg-base-100 shadow-sm">
+      <div class="card-body gap-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="card-title">Authenticated</h2>
+            <p class="text-sm text-base-content/65">Token preview: {tokenPreview}</p>
+            <p class="text-sm text-base-content/65">Expires: {expiresAt}</p>
+          </div>
+          <button class="btn btn-outline" onClick={() => auth.logout()}>
+            Logout
+          </button>
         </div>
-        <button class="ghost" onClick={() => auth.logout()}>
-          Logout
-        </button>
+        <pre class="mockup-code border border-base-300 p-4 text-sm">
+          {JSON.stringify(auth.authHeaders(), null, 2)}
+        </pre>
       </div>
-      <pre>{JSON.stringify(auth.authHeaders(), null, 2)}</pre>
     </section>
   );
 }
 
 export function AuthPage() {
   return (
-    <section class="stack">
-      <PageHeader eyebrow="Token auth" title="Bearer headers without ceremony.">
+    <section class="grid gap-5">
+      <PageHeader title="Bearer headers without ceremony.">
         A tiny controller persists a token, exposes auth headers for the API client, and lets the
         app keep ownership of login and refresh policy.
       </PageHeader>

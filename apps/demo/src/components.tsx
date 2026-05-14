@@ -1,21 +1,49 @@
 import { bind, text, type Action, type Child } from "@nodiffjs/core";
-import { preferences, type PreferencesData } from "./state";
+import { preferences, themeOptions, type PreferencesData } from "./state";
+
+const badgeTone = {
+  neutral: "badge-neutral",
+  success: "badge-success",
+  warning: "badge-warning",
+  danger: "badge-error",
+} as const;
 
 export function PageHeader(props: {
-  eyebrow: string;
   title: string;
   children: Child;
   actions?: Child;
   hero?: boolean;
 }) {
+  const headerClass = props.hero
+    ? "hero rounded-box bg-primary text-primary-content"
+    : "hero rounded-box bg-base-100 shadow-sm";
+  const copyClass = props.hero
+    ? "max-w-2xl py-4 text-primary-content/75"
+    : "mt-4 max-w-2xl text-base-content/70";
+
   return (
-    <header class={{ panel: true, hero: props.hero, split: Boolean(props.actions) }}>
-      <div>
-        <p class="eyebrow">{props.eyebrow}</p>
-        <h1>{props.title}</h1>
-        <p>{props.children}</p>
+    <header class={headerClass}>
+      <div
+        class={
+          props.actions
+            ? "hero-content w-full flex-col items-start gap-6 lg:flex-row lg:items-end lg:justify-between"
+            : "hero-content w-full justify-start"
+        }
+      >
+        <div class="max-w-3xl">
+          <h1
+            class={
+              props.hero
+                ? "text-5xl font-black leading-none tracking-tight sm:text-6xl"
+                : "text-4xl font-black leading-tight tracking-tight"
+            }
+          >
+            {props.title}
+          </h1>
+          <p class={copyClass}>{props.children}</p>
+        </div>
+        {props.actions ? <div class="shrink-0">{props.actions}</div> : null}
       </div>
-      {props.actions}
     </header>
   );
 }
@@ -26,7 +54,10 @@ export function Badge(props: {
   use?: Action<HTMLElement> | Array<Action<HTMLElement>>;
 }) {
   return (
-    <span class={["badge", props.tone ?? "neutral"]} use={props.use}>
+    <span
+      class={`badge badge-sm ${badgeTone[props.tone ?? "neutral"]} whitespace-nowrap font-semibold`}
+      use={props.use}
+    >
       {props.children}
     </span>
   );
@@ -34,110 +65,131 @@ export function Badge(props: {
 
 export function SectionTitle(props: { title: string; children?: Child; actions?: Child }) {
   return (
-    <div class="section-title">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h2>{props.title}</h2>
-        {props.children ? <p class="muted">{props.children}</p> : null}
+        <h2 class="text-xl font-bold">{props.title}</h2>
+        {props.children ? (
+          <p class="mt-1 max-w-2xl text-sm text-base-content/65">{props.children}</p>
+        ) : null}
       </div>
       {props.actions}
     </div>
   );
 }
 
-export function StatCard(props: {
-  label: string;
-  value: string | number | Node;
-  hint?: string | Node;
-  use?: Action<HTMLElement> | Array<Action<HTMLElement>>;
-  children?: Child;
-}) {
-  return (
-    <article class="stat-card" use={props.use}>
-      <div class="stat-card-top">
-        <span>{props.label}</span>
-        {props.hint ? <small>{props.hint}</small> : null}
-      </div>
-      <strong>{props.value}</strong>
-      {props.children}
-    </article>
-  );
-}
-
 export function CounterCard() {
   return (
     <article
-      class="stat-card control-card"
+      class="card card-border border-primary/20 bg-base-100 shadow-sm"
       use={[
         bind.dataset("step", preferences, (state) => state.step),
         bind.aria("live", preferences, () => "polite"),
       ]}
     >
-      <div class="stat-card-top">
-        <span>Counter</span>
-        <Badge>localStorage</Badge>
+      <div class="card-body gap-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-sm font-bold uppercase tracking-wide text-base-content/55">Counter</p>
+            <strong class="block text-5xl font-black tabular-nums">
+              {text(preferences, (state) => state.count)}
+            </strong>
+          </div>
+          <Badge>localStorage</Badge>
+        </div>
+
+        <div class="join w-full">
+          <button
+            class="btn btn-primary join-item flex-1"
+            onClick={() => preferences.getState().increment()}
+          >
+            Increment
+          </button>
+          <button
+            class="btn btn-ghost join-item"
+            onClick={() => preferences.getState().resetCount()}
+          >
+            Reset
+          </button>
+        </div>
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Step</legend>
+          <input
+            class="input input-bordered input-sm w-full"
+            type="number"
+            min="1"
+            max="10"
+            use={bind.number(
+              preferences,
+              (state) => state.step,
+              (step) => ({
+                step: Math.max(1, Math.min(10, Math.trunc(step ?? 1))),
+              }),
+            )}
+          />
+        </fieldset>
       </div>
-      <strong>{text(preferences, (state) => state.count)}</strong>
-      <div class="counter-controls">
-        <button onClick={() => preferences.getState().increment()}>Increment</button>
-        <button class="ghost" onClick={() => preferences.getState().resetCount()}>
-          Reset
-        </button>
-      </div>
-      <label class="field compact-field">
-        <span>Step</span>
-        <input
-          type="number"
-          min="1"
-          max="10"
-          use={bind.number(
-            preferences,
-            (state) => state.step,
-            (step) => ({
-              step: Math.max(1, Math.min(10, Math.trunc(step ?? 1))),
-            }),
-          )}
-        />
-      </label>
     </article>
   );
 }
 
 export function ThemeCard() {
+  const previews = ["cupcake", "synthwave", "nord", "sunset"] as const;
+
   return (
-    <article class="stat-card control-card">
-      <div class="stat-card-top">
-        <span>Theme</span>
-        <Badge use={bind.text(preferences, (state) => state.theme)} />
-      </div>
-      <div class="theme-row">
-        <label class="field compact-field">
-          <span>Preference</span>
-          <select
-            use={bind.value(
-              preferences,
-              (state) => state.theme,
-              (theme) => ({ theme: theme as PreferencesData["theme"] }),
-              { event: "change" },
-            )}
+    <article class="card card-border bg-base-100 shadow-sm">
+      <div class="card-body gap-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-sm font-bold uppercase tracking-wide text-base-content/55">Theme</p>
+            <strong class="block text-2xl font-black">DaisyUI</strong>
+          </div>
+          <Badge use={bind.text(preferences, (state) => state.theme)} />
+        </div>
+
+        <div class="dropdown dropdown-end">
+          <div tabindex="0" role="button" class="btn btn-outline btn-sm w-full justify-between">
+            Theme
+            <span class="text-xs opacity-60">{themeOptions.length}</span>
+          </div>
+          <ul
+            tabindex="-1"
+            class="dropdown-content z-10 mt-2 w-56 rounded-box bg-base-300 p-2 shadow-2xl"
           >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-        <span
-          class="theme-swatch"
-          use={[
-            bind.dataset("theme", preferences, (state) => state.theme),
-            bind.style(preferences, (state) => ({
-              backgroundColor: state.theme === "dark" ? "#171a23" : "#ffffff",
-              borderColor: state.theme === "system" ? "#8a93a5" : "#111827",
-            })),
-          ]}
-        />
+            {themeOptions.map((theme) => (
+              <li>
+                <input
+                  type="radio"
+                  name="theme-dropdown"
+                  class="theme-controller btn btn-ghost btn-sm btn-block justify-start"
+                  aria-label={themeLabel(theme)}
+                  value={theme === "system" ? "default" : theme}
+                  use={bind.prop("checked", preferences, (state) => state.theme === theme)}
+                  onChange={() => preferences.getState().setTheme(theme)}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2">
+          {previews.map((theme) => (
+            <div data-theme={theme} class="rounded-box bg-base-200 p-2 shadow-inner">
+              <div class="h-8 rounded-field bg-primary" />
+            </div>
+          ))}
+        </div>
       </div>
     </article>
   );
+}
+
+function themeLabel(theme: PreferencesData["theme"]): string {
+  if (theme === "system") return "System";
+  return theme
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export function StatusMetric(props: {
@@ -148,26 +200,31 @@ export function StatusMetric(props: {
   use?: Action<HTMLElement> | Array<Action<HTMLElement>>;
 }) {
   return (
-    <article class="stat-card" use={props.use}>
-      <div class="stat-card-top">
-        <span>{props.label}</span>
+    <div class="stat" use={props.use}>
+      <div class="flex items-start justify-between gap-3">
+        <div class="stat-title">{props.label}</div>
         <Badge>{props.badge}</Badge>
       </div>
-      <strong>{props.value}</strong>
-      <small>{props.hint}</small>
-    </article>
+      <div class="stat-value text-3xl">{props.value}</div>
+      <div class="stat-desc mt-2 whitespace-normal">{props.hint}</div>
+    </div>
   );
 }
 
 export function FeatureList(props: { title: string; items: string[]; use?: Action<HTMLElement> }) {
   return (
-    <article class="panel" use={props.use}>
-      <h3>{props.title}</h3>
-      <ul>
-        {props.items.map((item) => (
-          <li>{item}</li>
-        ))}
-      </ul>
+    <article class="card card-border bg-base-100 shadow-sm" use={props.use}>
+      <div class="card-body">
+        <h3 class="card-title text-base">{props.title}</h3>
+        <ul class="mt-2 grid gap-2 text-sm text-base-content/70">
+          {props.items.map((item) => (
+            <li class="flex gap-2">
+              <span class="badge badge-primary badge-xs mt-1.5" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </article>
   );
 }

@@ -11,8 +11,8 @@ import { auth, postsVm } from "../state";
 
 export function HomePage() {
   return (
-    <section class="stack">
-      <PageHeader hero eyebrow="Tiny TypeScript runtime" title="TSX as browser syntax.">
+    <section class="grid gap-5">
+      <PageHeader hero title="TSX as browser syntax.">
         A lean rich-client framework that lives with your app: real DOM nodes, explicit store
         subscriptions, zod-checked data, cache, auth, forms, and routing without React, axios, a
         virtual DOM, or a scheduler.
@@ -23,29 +23,31 @@ export function HomePage() {
         replay behind these updates.
       </SectionTitle>
 
-      <div class="dashboard-grid">
+      <div class="grid gap-4 xl:grid-cols-[minmax(18rem,1fr)_minmax(22rem,1.4fr)_minmax(16rem,1fr)]">
         <CounterCard />
-        <StatusMetric
-          label="Auth"
-          value={text(auth.store, (state) => state.status)}
-          badge={text(auth.store, (state) => (state.token ? "token" : "guest"))}
-          hint="Persisted bearer-token helper"
-          use={bind.classes(auth.store, (state) => ({
-            authenticated: state.status === "authenticated",
-          }))}
-        />
-        <StatusMetric
-          label="Posts"
-          value={text(postsVm, (state) => state.total)}
-          badge={text(postsVm, (state) => (state.loading ? "loading" : state.status))}
-          hint={text(postsVm, (state) =>
-            state.stale ? "Stale cache visible while refreshing" : "Zod-validated API data",
-          )}
-          use={[
-            bind.prop("title", postsVm, (state) => `${state.total} parsed posts in memory`),
-            bind.classes(postsVm, (state) => ({ "is-loading": state.loading })),
-          ]}
-        />
+        <section class="stats stats-vertical bg-base-100 shadow-sm md:stats-horizontal">
+          <StatusMetric
+            label="Auth"
+            value={text(auth.store, (state) => state.status)}
+            badge={text(auth.store, (state) => (state.token ? "token" : "guest"))}
+            hint="Persisted bearer-token helper"
+            use={bind.classes(auth.store, (state) => ({
+              "text-success": state.status === "authenticated",
+            }))}
+          />
+          <StatusMetric
+            label="Posts"
+            value={text(postsVm, (state) => state.total)}
+            badge={text(postsVm, (state) => (state.loading ? "loading" : state.status))}
+            hint={text(postsVm, (state) =>
+              state.stale ? "Stale cache visible while refreshing" : "Zod-validated API data",
+            )}
+            use={[
+              bind.prop("title", postsVm, (state) => `${state.total} parsed posts in memory`),
+              bind.classes(postsVm, (state) => ({ "text-warning": state.loading })),
+            ]}
+          />
+        </section>
         <ThemeCard />
       </div>
 
@@ -53,7 +55,7 @@ export function HomePage() {
         The demo keeps the framework surface visible instead of hiding it behind app-specific
         wrappers.
       </SectionTitle>
-      <section class="grid">
+      <section class="grid gap-4 md:grid-cols-2">
         <FeatureList
           title="Framework surface"
           items={[

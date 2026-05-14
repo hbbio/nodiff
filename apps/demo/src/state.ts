@@ -5,10 +5,27 @@ import { z } from "zod";
 export const appCache = createLocalCache("demo:");
 export const apiCache = createLocalCache("demo:http:");
 
+export const themeOptions = [
+  "system",
+  "light",
+  "dark",
+  "cupcake",
+  "corporate",
+  "emerald",
+  "synthwave",
+  "retro",
+  "cyberpunk",
+  "night",
+  "nord",
+  "sunset",
+  "silk",
+] as const;
+
 export const PreferencesSchema = z.object({
   count: z.number().int().nonnegative(),
   search: z.string(),
-  theme: z.enum(["system", "light", "dark"]),
+  postPage: z.number().int().min(1).default(1),
+  theme: z.enum(themeOptions),
   step: z.number().int().min(1).max(10).default(1),
 });
 
@@ -17,6 +34,7 @@ export type PreferencesState = PreferencesData & {
   increment(): void;
   resetCount(): void;
   setSearch(search: string): void;
+  setPostPage(page: number): void;
   setTheme(theme: PreferencesData["theme"]): void;
   setStep(step: number): void;
 };
@@ -24,6 +42,7 @@ export type PreferencesState = PreferencesData & {
 const defaultPreferences: PreferencesData = {
   count: 0,
   search: "",
+  postPage: 1,
   theme: "system",
   step: 1,
 };
@@ -35,7 +54,8 @@ export const preferences = createStore<PreferencesState>((set) => ({
   ...savedPreferences,
   increment: () => set((state) => ({ count: state.count + state.step })),
   resetCount: () => set({ count: 0 }),
-  setSearch: (search) => set({ search }),
+  setSearch: (search) => set({ search, postPage: 1 }),
+  setPostPage: (postPage) => set({ postPage: Math.max(1, Math.trunc(postPage)) }),
   setTheme: (theme) => set({ theme }),
   setStep: (step) => set({ step }),
 }));
@@ -44,6 +64,7 @@ function preferenceSnapshot(state: PreferencesState): PreferencesData {
   return {
     count: state.count,
     search: state.search,
+    postPage: state.postPage,
     theme: state.theme,
     step: state.step,
   };
@@ -51,10 +72,19 @@ function preferenceSnapshot(state: PreferencesState): PreferencesData {
 
 preferences.subscribe((state) => {
   appCache.set("preferences", preferenceSnapshot(state), { tags: ["preferences"] });
-  document.documentElement.dataset.theme = state.theme;
+  applyTheme(state.theme);
 });
 
-document.documentElement.dataset.theme = preferences.getState().theme;
+function applyTheme(theme: PreferencesData["theme"]): void {
+  if (theme === "system") {
+    document.documentElement.removeAttribute("data-theme");
+    return;
+  }
+
+  document.documentElement.dataset.theme = theme;
+}
+
+applyTheme(preferences.getState().theme);
 
 export const auth = createAuth<{ email: string; name: string }>({ storageKey: "demo:auth" });
 
@@ -96,17 +126,30 @@ export type PostsVm = {
   updatedAt: number | null;
   error: string | null;
   total: number;
+  filtered: number;
   search: string;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  pageStart: number;
+  pageEnd: number;
   visible: Post[];
 };
 
 export function readPostsVm(): PostsVm {
   const resource = posts.store.getState();
-  const search = preferences.getState().search.trim().toLowerCase();
+  const prefs = preferences.getState();
+  const search = prefs.search.trim().toLowerCase();
   const all = resource.data ?? [];
-  const visible = search
-    ? all.filter((post) => `${post.title} ${post.body}`.toLowerCase().includes(search)).slice(0, 16)
-    : all.slice(0, 8);
+  const filtered = search
+    ? all.filter((post) => `${post.title} ${post.body}`.toLowerCase().includes(search))
+    : all;
+  const pageSize = 6;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const page = Math.min(prefs.postPage, pageCount);
+  const pageStart = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = Math.min(page * pageSize, filtered.length);
+  const visible = filtered.slice(pageStart === 0 ? 0 : pageStart - 1, pageEnd);
 
   return {
     status: resource.status,
@@ -115,7 +158,13 @@ export function readPostsVm(): PostsVm {
     updatedAt: resource.updatedAt,
     error: resource.error?.message ?? null,
     total: all.length,
+    filtered: filtered.length,
     search,
+    page,
+    pageSize,
+    pageCount,
+    pageStart,
+    pageEnd,
     visible,
   };
 }
