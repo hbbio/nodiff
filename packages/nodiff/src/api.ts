@@ -83,6 +83,15 @@ function applyHeaders(target: Headers, source: HeadersInit | null | undefined): 
   new Headers(source).forEach((value, key) => target.set(key, value));
 }
 
+function hashString(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function isJsonBody(body: unknown): boolean {
   if (body === null || body === undefined) return false;
   if (typeof body === "string") return false;
@@ -104,7 +113,7 @@ export function createApi(options: ApiClientOptions = {}) {
   const cache = options.cache ?? createLocalCache("nodiff:http:");
   const managedAuthOrigin = authOrigin(options.baseUrl);
 
-  async function runFetch<T>(url: URL, request: ApiRequestOptions<T>, retry: boolean): Promise<T> {
+  function buildHeaders(url: URL, request: ApiRequestOptions<unknown>): Headers {
     const canUseClientHeaders = url.origin === managedAuthOrigin;
     const headers = new Headers();
     if (canUseClientHeaders) applyHeaders(headers, options.headers);
@@ -120,10 +129,35 @@ export function createApi(options: ApiClientOptions = {}) {
       }
     }
 
+    return headers;
+  }
+
+  function assertRequiredAuth(request: ApiRequestOptions<unknown>, headers: Headers): void {
     if (request.auth === "required" && !headers.has("Authorization")) {
       throw new Error("Authentication token is required for this request.");
     }
+  }
 
+  function cacheKeyFor(
+    url: URL,
+    method: string,
+    cacheOptions: ApiCacheOptions,
+    headers: Headers,
+  ): string {
+    const baseKey = cacheOptions.key ?? `${method}:${url.toString()}`;
+    const authorization = headers.get("Authorization");
+    if (!authorization) return baseKey;
+    return `auth:${hashString(authorization)}:${baseKey}`;
+  }
+
+  async function runFetch<T>(
+    url: URL,
+    request: ApiRequestOptions<T>,
+    retry: boolean,
+    preparedHeaders?: Headers,
+  ): Promise<T> {
+    const headers = new Headers(preparedHeaders ?? buildHeaders(url, request));
+    assertRequiredAuth(request, headers);
     const body = request.body;
     const init: RequestInit = {
       method: request.method ?? (body === undefined ? "GET" : "POST"),
@@ -165,9 +199,11 @@ export function createApi(options: ApiClientOptions = {}) {
   ): Promise<T> {
     const method = requestOptions.method ?? (requestOptions.body === undefined ? "GET" : "POST");
     const url = resolveUrl(options.baseUrl, path, requestOptions.query);
+    const headers = buildHeaders(url, requestOptions);
+    assertRequiredAuth(requestOptions, headers);
     const cacheOptions = requestOptions.cache;
     const canCache = method === "GET" && cacheOptions !== false && cacheOptions !== undefined;
-    const cacheKey = canCache ? (cacheOptions.key ?? `${method}:${url.toString()}`) : "";
+    const cacheKey = canCache ? cacheKeyFor(url, method, cacheOptions, headers) : "";
 
     if (canCache) {
       const hit = cache.get<T>(cacheKey, requestOptions.schema, {
@@ -175,15 +211,25 @@ export function createApi(options: ApiClientOptions = {}) {
       });
       if (hit && !hit.stale) return hit.value;
       if (hit && hit.stale && cacheOptions.swr) {
-        void runFetch<T>(url, requestOptions, true)
-          .then((value) => cache.set(cacheKey, value, cacheOptions))
+        void runFetch<T>(url, requestOptions, true, headers)
+          .then((value) => {
+            const refreshedHeaders = buildHeaders(url, requestOptions);
+            cache.set(
+              cacheKeyFor(url, method, cacheOptions, refreshedHeaders),
+              value,
+              cacheOptions,
+            );
+          })
           .catch(() => undefined);
         return hit.value;
       }
     }
 
-    const value = await runFetch<T>(url, requestOptions, true);
-    if (canCache) cache.set(cacheKey, value, cacheOptions);
+    const value = await runFetch<T>(url, requestOptions, true, headers);
+    if (canCache) {
+      const refreshedHeaders = buildHeaders(url, requestOptions);
+      cache.set(cacheKeyFor(url, method, cacheOptions, refreshedHeaders), value, cacheOptions);
+    }
     return value;
   }
 

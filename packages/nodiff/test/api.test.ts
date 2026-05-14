@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { ApiError, createApi } from "../src/api";
+import { createLocalCache } from "../src/cache";
 import { installDom } from "./test-dom";
 
 type FetchCall = {
@@ -178,6 +179,50 @@ describe("createApi", () => {
     expect(refreshes).toBe(1);
     expect(calls).toHaveLength(2);
     expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe("Bearer token");
+  });
+
+  test("partitions cached GET responses by authorization header", async () => {
+    let token = "alice";
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({
+        user: new Headers(init?.headers).get("authorization"),
+      });
+    };
+
+    const cache = createLocalCache("api-test:");
+    const api = createApi({
+      baseUrl: "/api",
+      cache,
+      getToken: () => token,
+    });
+
+    await expect(api.get("/me", { auth: "required", cache: { ttl: 60_000 } })).resolves.toEqual({
+      user: "Bearer alice",
+    });
+    token = "bob";
+    await expect(api.get("/me", { auth: "required", cache: { ttl: 60_000 } })).resolves.toEqual({
+      user: "Bearer bob",
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(cache.keys()).toHaveLength(2);
+    expect(cache.keys().some((key) => key.includes("alice") || key.includes("bob"))).toBe(false);
+  });
+
+  test("checks required auth before reading GET cache entries", async () => {
+    const cache = createLocalCache("api-test:");
+    cache.set("GET:https://example.test/api/me", { ok: true });
+
+    const api = createApi({ baseUrl: "/api", cache });
+
+    await expect(
+      api.get("/me", {
+        auth: "required",
+        cache: { ttl: 60_000 },
+      }),
+    ).rejects.toThrow("Authentication token is required");
+    expect(calls).toHaveLength(0);
   });
 
   test("throws ApiError for failed responses after retry", async () => {
