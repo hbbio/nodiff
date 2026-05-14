@@ -73,6 +73,20 @@ function normalizeCspSource(source: string): string {
   return normalizeOrigin(source);
 }
 
+function normalizeReportUri(uri: string): string {
+  if (/[\r\n;]/.test(uri)) {
+    throw new SecurityViolationError({
+      type: "unsafe-config",
+      message: `Invalid CSP report URI: ${uri}`,
+      value: uri,
+    });
+  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(uri) || uri.startsWith("//")) {
+    return new URL(uri, currentOrigin()).toString();
+  }
+  return uri;
+}
+
 export class SecurityViolationError extends Error {
   constructor(public readonly violation: SecurityViolation) {
     super(violation.message);
@@ -227,7 +241,7 @@ export function contentSecurityPolicy(options: SecurityHeadersOptions = {}): str
 
   if (policy.enforceHttps) directives.push("upgrade-insecure-requests");
   if (options.reportUri)
-    directives.push(directive("report-uri", [normalizeCspSource(options.reportUri)]));
+    directives.push(directive("report-uri", [normalizeReportUri(options.reportUri)]));
   return directives.join("; ");
 }
 

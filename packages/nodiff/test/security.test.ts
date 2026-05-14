@@ -89,10 +89,24 @@ describe("SecurityPolicy", () => {
     expect(headers["Strict-Transport-Security"]).toContain("max-age=");
   });
 
+  test("preserves CSP report-uri paths", () => {
+    expect(contentSecurityPolicy({ reportUri: "/csp-report" })).toContain("report-uri /csp-report");
+    expect(
+      contentSecurityPolicy({
+        reportUri: "https://reports.example.test/csp/path?app=nodiff",
+      }),
+    ).toContain("report-uri https://reports.example.test/csp/path?app=nodiff");
+  });
+
   test("rejects invalid CSP source input", () => {
     expect(() =>
       contentSecurityPolicy({
         connectSrc: ["https://api.example.test; script-src *"],
+      }),
+    ).toThrow(SecurityViolationError);
+    expect(() =>
+      contentSecurityPolicy({
+        reportUri: "/csp-report; script-src *",
       }),
     ).toThrow(SecurityViolationError);
   });
