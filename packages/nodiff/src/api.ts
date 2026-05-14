@@ -57,11 +57,18 @@ function resolveUrl(
   path: string,
   query: Record<string, QueryValue> | undefined,
 ): string {
-  const base =
-    baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost");
-  const url = /^https?:\/\//i.test(path)
-    ? new URL(path)
-    : new URL(path, base.endsWith("/") ? base : `${base}/`);
+  if (/^https?:\/\//i.test(path)) {
+    const url = new URL(path);
+    appendQuery(url, query);
+    return url.toString();
+  }
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  const base = baseUrl ? new URL(baseUrl, origin).toString() : origin;
+  const url = baseUrl
+    ? new URL(path.replace(/^\/+/, ""), base.endsWith("/") ? base : `${base}/`)
+    : new URL(path.startsWith("/") ? path : `/${path}`, base);
+
   appendQuery(url, query);
   return url.toString();
 }
