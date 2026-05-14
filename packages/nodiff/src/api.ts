@@ -309,10 +309,11 @@ export function createApi(options: ApiClientOptions = {}) {
     assertRequiredAuth(requestOptions, headers);
     const cacheOptions = requestOptions.cache;
     const canCache = method === "GET" && cacheOptions !== false && cacheOptions !== undefined;
-    if (canCache && security.isStrict() && !requestOptions.schema) {
+    const cacheRequiresSchema = security.isStrict() || security.cache.requireSchema === true;
+    if (canCache && cacheRequiresSchema && !requestOptions.schema) {
       throw security.report({
         type: "blocked-cache",
-        message: "Strict cached API requests require a response schema.",
+        message: "Cached API requests require a response schema.",
       });
     }
     if (

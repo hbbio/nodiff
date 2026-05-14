@@ -479,6 +479,31 @@ describe("createApi", () => {
     ).resolves.toEqual({ ok: true });
   });
 
+  test("honors cache requireSchema policy outside strict mode", async () => {
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: inputUrl(url), init });
+      return jsonResponse({ ok: true });
+    };
+
+    const api = createApi({
+      baseUrl: "/api",
+      security: {
+        cache: { requireSchema: true },
+      },
+    });
+
+    await expect(api.get("/settings", { cache: { ttl: 500 } })).rejects.toThrow(
+      "require a response schema",
+    );
+    await expect(
+      api.get("/settings", {
+        schema: z.object({ ok: z.boolean() }),
+        cache: { ttl: 500 },
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toHaveLength(1);
+  });
+
   test("aborts requests that exceed a configured timeout", async () => {
     globalThis.fetch = async (_url, init) =>
       new Promise<Response>((_resolve, reject) => {
