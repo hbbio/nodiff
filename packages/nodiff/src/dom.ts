@@ -373,6 +373,7 @@ const svgTags = new Set([
 
 const blockedElementTags = new Set(["script", "iframe", "object", "embed"]);
 const rawHtmlSanitizerBlockedTags = new Set([...blockedElementTags, "link", "meta"]);
+const rawHtmlSinkAttributes = new Set(["innerhtml", "outerhtml", "srcdoc"]);
 const urlAttributes = new Set([
   "href",
   "src",
@@ -472,6 +473,9 @@ function safeUrlAttributeValue(element: Element, name: string, value: string): s
 
 export function validateAttributeValue(element: Element, name: string, value: string): void {
   const normalized = name.toLowerCase();
+  if (rawHtmlSinkAttributes.has(normalized)) {
+    reportDomViolation(`Raw HTML DOM sink is not supported: ${name}.`, value);
+  }
   if (normalized.startsWith("on")) {
     reportDomViolation(`Event handler attributes are not supported: ${name}.`, value);
   }

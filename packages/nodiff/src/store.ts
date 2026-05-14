@@ -815,7 +815,7 @@ export const bind = {
   ): Action<TElement> {
     return (element) => {
       const sync = (value: TValue) => {
-        (element as unknown as Record<string, unknown>)[name] = value;
+        setPropertyValue(element, name, value);
       };
       sync(selector(store.getState()));
       return subscribeSelector(store, selector, sync, equality);

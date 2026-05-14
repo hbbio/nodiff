@@ -587,4 +587,49 @@ describe("bind helpers", () => {
 
     unmount();
   });
+
+  test("blocks raw HTML DOM sink property bindings", () => {
+    const rawProperty = createStore(() => ({
+      html: "<img src=x onerror=alert(1)>",
+    }));
+
+    expect(() =>
+      jsx("div", {
+        use: bind.prop("innerHTML", rawProperty, (state) => state.html),
+      }),
+    ).toThrow("Raw HTML DOM sink");
+    expect(() =>
+      jsx("div", {
+        use: bind.prop("outerHTML", rawProperty, (state) => state.html),
+      }),
+    ).toThrow("Raw HTML DOM sink");
+    expect(() =>
+      jsx("iframe-preview", {
+        use: bind.prop("srcdoc", rawProperty, (state) => state.html),
+      }),
+    ).toThrow("Raw HTML DOM sink");
+
+    const grouped = createStore(() => ({
+      props: {
+        title: "Safe",
+      } satisfies PropsBinding,
+    }));
+
+    const unmount = mount(
+      "#app",
+      jsx("div", {
+        use: bind.props(grouped, (state) => state.props),
+      }),
+    );
+
+    expect(() =>
+      grouped.setState({
+        props: {
+          innerHTML: "<img src=x onerror=alert(1)>",
+        },
+      }),
+    ).toThrow("Raw HTML DOM sink");
+
+    unmount();
+  });
 });
