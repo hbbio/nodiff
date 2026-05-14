@@ -48,7 +48,7 @@ describe("bind helpers", () => {
     cleanupDom = undefined;
   });
 
-  test("binds style, classes, dataset, aria, and properties", () => {
+  test("binds style, classes, dataset, and aria", () => {
     const store = createBindingStore();
 
     const unmount = mount(
@@ -60,7 +60,6 @@ describe("bind helpers", () => {
           bind.classes(store, (state) => state.classes),
           bind.dataset("user-id", store, (state) => state.userId),
           bind.aria("busy", store, (state) => state.busy),
-          bind.prop<BindingState, string, HTMLElement>("title", store, (state) => state.title),
         ],
         children: "Bound",
       }),
@@ -74,14 +73,12 @@ describe("bind helpers", () => {
     expect(div.classList.contains("hidden")).toBe(false);
     expect(div.getAttribute("data-user-id")).toBe("123");
     expect(div.getAttribute("aria-busy")).toBe("true");
-    expect(div.title).toBe("Initial");
 
     store.setState({
       style: { color: "blue", zIndex: 2 },
       classes: ["selected", "static"],
       userId: null,
       busy: false,
-      title: "Updated",
     });
 
     expect(div.style.color).toBe("blue");
@@ -92,7 +89,6 @@ describe("bind helpers", () => {
     expect(div.classList.contains("selected")).toBe(true);
     expect(div.hasAttribute("data-user-id")).toBe(false);
     expect(div.hasAttribute("aria-busy")).toBe(false);
-    expect(div.title).toBe("Updated");
 
     store.setState({ style: "display: none; color: green;" });
     expect(div.style.display).toBe("none");
@@ -605,27 +601,7 @@ describe("bind helpers", () => {
     unmount();
   });
 
-  test("blocks raw HTML DOM sink property bindings", () => {
-    const rawProperty = createStore(() => ({
-      html: "<img src=x onerror=alert(1)>",
-    }));
-
-    expect(() =>
-      jsx("div", {
-        use: bind.prop("innerHTML", rawProperty, (state) => state.html),
-      }),
-    ).toThrow("Raw HTML DOM sink");
-    expect(() =>
-      jsx("div", {
-        use: bind.prop("outerHTML", rawProperty, (state) => state.html),
-      }),
-    ).toThrow("Raw HTML DOM sink");
-    expect(() =>
-      jsx("iframe-preview", {
-        use: bind.prop("srcdoc", rawProperty, (state) => state.html),
-      }),
-    ).toThrow("Raw HTML DOM sink");
-
+  test("blocks raw HTML DOM sink grouped props", () => {
     const grouped = createStore(() => ({
       props: {
         title: "Safe",

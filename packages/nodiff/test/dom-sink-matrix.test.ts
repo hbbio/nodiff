@@ -87,15 +87,6 @@ const writePaths: WritePath[] = [
     },
   },
   {
-    name: "bind.prop",
-    write(sink) {
-      const store = valueStore(sink.value);
-      render(sink.tag, {
-        use: bind.prop(sink.prop, store, (state) => state.value),
-      });
-    },
-  },
-  {
     name: "bind.props direct",
     write(sink) {
       const store = createStore(() => ({

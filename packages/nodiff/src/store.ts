@@ -739,21 +739,6 @@ export const bind = {
     };
   },
 
-  prop<TState, TValue, TElement extends Element = Element>(
-    name: string,
-    store: ReadableStore<TState>,
-    selector: Selector<TState, TValue>,
-    equality?: Equality<TValue>,
-  ): Action<TElement> {
-    return (element) => {
-      const sync = (value: TValue) => {
-        setDomProperty(element, name, value);
-      };
-      sync(selector(store.getState()));
-      return subscribeSelector(store, selector, sync, equality);
-    };
-  },
-
   props<TState, TValue extends PropsBinding, TElement extends Element = Element>(
     store: ReadableStore<TState>,
     selector: Selector<TState, TValue>,
