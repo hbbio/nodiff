@@ -32,11 +32,11 @@
       "name": "@nodiffjs/core",
       "version": "0.1.0",
       "dependencies": {
-        "zod": "catalog:",
-        "zustand": "catalog:",
+        "zod": "^4.4.3",
+        "zustand": "^5.0.13",
       },
       "devDependencies": {
-        "@typescript/native-preview": "catalog:",
+        "@typescript/native-preview": "7.0.0-dev.20260421.2",
       },
     },
   },

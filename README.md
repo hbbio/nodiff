@@ -32,6 +32,19 @@ nodiff/
   apps/demo/         demo rich-client app
 ```
 
+## Fork-first workflow
+
+NoDiff is meant to be forked as a monorepo. The cleanest development loop is to edit the
+framework package and the app together, then keep the pieces that fit the app you are building.
+
+The demo app intentionally consumes `packages/nodiff/src` through Vite and TypeScript aliases for
+`@nodiffjs/core`. That keeps HMR and editor navigation on source files while you change the runtime,
+bindings, router, API client, and app code in one workspace.
+
+The package build is still kept clean. `packages/nodiff` emits `dist`, declares package exports, uses
+publishable dependency ranges, and ships package-local README/LICENSE files. Treat that artifact as a
+consumer/publishing check, not as the source path used by the demo during normal development.
+
 ## Why this exists
 
 Modern front-end apps often begin with a large default stack. A JSX renderer. A request client. A router. A global state tool. A form library. A cache layer. Auth glue. Then the browser shows up at the end.
@@ -148,6 +161,9 @@ bun run build
 ```
 
 The root scripts run the framework package first, then the demo app where that ordering matters.
+
+During `bun run dev`, the demo resolves `@nodiffjs/core` to `packages/nodiff/src` instead of `dist`.
+This is deliberate: framework edits and app edits should update together in the fork.
 
 ## Current toolchain
 
@@ -1044,6 +1060,14 @@ The demo Vite build target is also `es2022`.
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./dom": {
+      "types": "./dist/dom.d.ts",
+      "import": "./dist/dom.js"
+    },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
     "./jsx-runtime": {
       "types": "./dist/jsx-runtime.d.ts",
       "import": "./dist/jsx-runtime.js"
@@ -1056,7 +1080,10 @@ The demo Vite build target is also `es2022`.
 }
 ```
 
-Before publishing, add a license, project metadata, tests, and the package ownership you want.
+The package source keeps extensionless local imports for the monorepo development path. The package
+build rewrites only the emitted `dist` specifiers so standard ESM consumers can import the packed
+artifact directly. Package metadata avoids workspace-only dependency protocols, so `npm pack` output
+can be installed outside this workspace.
 
 ## The one-file promise
 
