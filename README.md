@@ -1,8 +1,10 @@
 # NoDiff
 
-A tiny TypeScript framework for rich-client apps that treats TSX as browser syntax.
+A tiny TypeScript framework for rich-client apps that treats TSX as browser syntax. This repo (which was built with LLM assistance) is a work-in-progress!
 
-In the LLM era, you do not need a fat web framework for every browser app. You often want a lean runtime that lives in the same monorepo as your app and evolves with it. That shape is easier for people and coding agents to integrate, inspect, change, and reason about. Fewer hidden layers means fewer bugs, faster feedback, and less time spent reverse-engineering framework behavior.
+In the LLM era, you do not need a fat web framework for every browser app, especially when your project grows. You often want a lean runtime that lives in the same monorepo as your app and evolves with it. 
+
+That shape is easier for people and coding agents to integrate, inspect, change, and reason about. Fewer hidden layers means fewer bugs, faster feedback, and less time spent reverse-engineering framework behavior.
 
 NoDiff gives you JSX ergonomics, real DOM nodes, explicit store subscriptions, zod-checked data, localStorage caching, token auth, forms, and routing. It does this without React, axios, a virtual DOM, a scheduler, or a framework runtime that owns your app.
 
@@ -22,7 +24,7 @@ function App() {
 mount("#app", App);
 ```
 
-TSX compiles through Vite into calls to `@nodiffjs/core/jsx-runtime`. Those calls create real DOM nodes. Stores decide when small regions update. Data enters the app through zod schemas. Cache entries carry expiry. Auth is just a bearer header helper over an app-owned token.
+TSX compiles through Vite into calls to `@nodiffjs/core/jsx-runtime`. Those calls create real DOM nodes (like Svelte). Stores decide when small regions update. Data enters the app through zod schemas. Cache entries carry expiry. Auth is just a bearer header helper over an app-owned token.
 
 This repo contains both the framework package and a demo app.
 
