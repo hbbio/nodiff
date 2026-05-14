@@ -1,5 +1,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type Action, type Child, type ElementProps, jsx } from "./dom";
+import { safeErrorMessage, toError } from "./errors";
+import { getSecurityPolicy } from "./security";
 import { subscribeSelector, view } from "./store";
 
 export type RouteContext<TMeta = unknown> = {
@@ -30,6 +32,8 @@ export type RouterState<TMeta = unknown> = {
 export type RouterOptions<TMeta = unknown> = {
   mode?: "history" | "hash";
   fallback?: (state: RouterState<TMeta>) => Child;
+  error?: Child | ((error: Error, state: RouterState<TMeta>) => Child);
+  onError?: (error: Error, state: RouterState<TMeta>) => void;
 };
 
 export type LinkProps = Omit<ElementProps<HTMLAnchorElement>, "href"> & {
@@ -180,6 +184,30 @@ export function guardedRoute<TMeta = unknown>(
   return (context) => (guard(context) ? component(context) : fallback(context));
 }
 
+function reportRouteException(error: Error): void {
+  getSecurityPolicy().notify({
+    type: "exception",
+    message: "Route exception captured.",
+    value: error.name,
+  });
+}
+
+function defaultRouteError(error: Error): Child {
+  return jsx("p", {
+    role: "alert",
+    children: safeErrorMessage(error),
+  });
+}
+
+function renderRouteError<TMeta>(
+  slot: RouterOptions<TMeta>["error"],
+  error: Error,
+  state: RouterState<TMeta>,
+): Child {
+  if (slot === undefined) return defaultRouteError(error);
+  return typeof slot === "function" ? slot(error, state) : slot;
+}
+
 export function createRouter<TMeta = unknown>(
   routes: RouteDefinition<TMeta>[],
   options: RouterOptions<TMeta> = {},
@@ -256,7 +284,14 @@ export function createRouter<TMeta = unknown>(
           }
           if (match.route.title && typeof document !== "undefined")
             document.title = match.route.title;
-          return match.route.component({ ...match, router });
+          try {
+            return match.route.component({ ...match, router });
+          } catch (caught) {
+            const error = toError(caught);
+            options.onError?.(error, state);
+            reportRouteException(error);
+            return renderRouteError(options.error, error, state);
+          }
         },
       );
     },

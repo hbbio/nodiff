@@ -1,4 +1,5 @@
 import { addCleanup, cleanupNode, replaceChildrenClean } from "./lifecycle";
+import { safeErrorMessage, toError } from "./errors";
 import { getSecurityPolicy } from "./security";
 
 export type PrimitiveChild = string | number | bigint | boolean | null | undefined;
@@ -6,6 +7,11 @@ export type Child = PrimitiveChild | Node | Child[] | Iterable<Child>;
 export type Component<P = Record<string, unknown>> = (props: P & { children?: Child }) => Child;
 export type Ref<T extends Node = Node> = ((node: T) => void) | { current: T | null };
 export type Action<T extends Element = Element> = (element: T) => void | (() => void);
+export type ErrorBoundaryProps = {
+  children: Child | (() => Child);
+  fallback?: Child | ((error: Error) => Child);
+  onError?: (error: Error) => void;
+};
 
 type EventPair = [EventListenerOrEventListenerObject, AddEventListenerOptions?];
 const trustedHTMLMarker = Symbol("nodiff:trustedHTML");
@@ -491,6 +497,33 @@ export const jsxs = jsx;
 
 export function Fragment(props: { children?: Child }): DocumentFragment {
   return fragment(props.children);
+}
+
+function reportException(error: Error): void {
+  getSecurityPolicy().notify({
+    type: "exception",
+    message: "Render exception captured.",
+    value: error.name,
+  });
+}
+
+function defaultErrorFallback(error: Error): HTMLElement {
+  const element = document.createElement("p");
+  element.setAttribute("role", "alert");
+  element.textContent = safeErrorMessage(error);
+  return element;
+}
+
+export function ErrorBoundary(props: ErrorBoundaryProps): Child {
+  try {
+    return typeof props.children === "function" ? props.children() : props.children;
+  } catch (caught) {
+    const error = toError(caught);
+    props.onError?.(error);
+    reportException(error);
+    if (props.fallback === undefined) return defaultErrorFallback(error);
+    return typeof props.fallback === "function" ? props.fallback(error) : props.fallback;
+  }
 }
 
 export function mount(

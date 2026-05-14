@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
-import { jsx, mount, sanitizeHTML, trustedHTML } from "../src/dom";
-import { configureSecurityPolicy } from "../src/security";
+import { ErrorBoundary, jsx, mount, sanitizeHTML, trustedHTML } from "../src/dom";
+import { configureSecurityPolicy, type SecurityViolation } from "../src/security";
 import { text, view } from "../src/store";
 import { installDom } from "./test-dom";
 
@@ -178,6 +178,58 @@ describe("DOM runtime", () => {
     );
 
     expect(childCount).toBe(2);
+
+    unmount();
+  });
+
+  test("error boundaries render successful children without security reports", () => {
+    const violations: SecurityViolation[] = [];
+    configureSecurityPolicy({
+      onViolation: (violation) => violations.push(violation),
+    });
+
+    const unmount = mount(
+      "#app",
+      ErrorBoundary({
+        children: () => jsx("strong", { children: "Ready" }),
+      }),
+    );
+
+    expect(document.querySelector("#app")?.textContent).toBe("Ready");
+    expect(violations).toHaveLength(0);
+
+    unmount();
+  });
+
+  test("error boundaries catch render exceptions without leaking details", () => {
+    const violations: SecurityViolation[] = [];
+    const seen: string[] = [];
+    configureSecurityPolicy({
+      onViolation: (violation) => violations.push(violation),
+    });
+    const secretError = new Error("database password=secret-token");
+
+    const unmount = mount(
+      "#app",
+      ErrorBoundary({
+        children: () => {
+          throw secretError;
+        },
+        onError: (error) => seen.push(error.message),
+      }),
+    );
+
+    const textContent = document.querySelector("#app")?.textContent ?? "";
+    expect(textContent).toBe("Something went wrong.");
+    expect(textContent).not.toContain("secret-token");
+    expect(seen).toEqual(["database password=secret-token"]);
+    expect(violations).toEqual([
+      {
+        type: "exception",
+        message: "Render exception captured.",
+        value: "Error",
+      },
+    ]);
 
     unmount();
   });

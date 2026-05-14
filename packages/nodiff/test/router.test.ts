@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mount } from "../src/dom";
 import { createRouter, guardedRoute } from "../src/router";
+import { configureSecurityPolicy, type SecurityViolation } from "../src/security";
 import { installDom } from "./test-dom";
 
 describe("router", () => {
@@ -10,9 +11,11 @@ describe("router", () => {
     cleanupDom = installDom();
     window.location.href = "http://example.test/";
     document.body.innerHTML = '<main id="app"></main>';
+    configureSecurityPolicy({});
   });
 
   afterEach(() => {
+    configureSecurityPolicy({});
     cleanupDom?.();
     cleanupDom = undefined;
   });
@@ -196,6 +199,93 @@ describe("router", () => {
     authenticated = true;
     router.navigate("/account?refresh=1");
     expect(document.querySelector("#app")?.textContent).toBe("Account");
+
+    unmount();
+    stop();
+  });
+
+  test("renders successful routes without error reports", () => {
+    const violations: SecurityViolation[] = [];
+    configureSecurityPolicy({
+      onViolation: (violation) => violations.push(violation),
+    });
+    const router = createRouter([{ path: "/", component: () => "Home" }], { mode: "hash" });
+
+    const stop = router.start();
+    const unmount = mount("#app", router.outlet());
+
+    expect(document.querySelector("#app")?.textContent).toBe("Home");
+    expect(violations).toHaveLength(0);
+
+    unmount();
+    stop();
+  });
+
+  test("route errors render safe fallback UI and notify hooks", () => {
+    const violations: SecurityViolation[] = [];
+    const seen: string[] = [];
+    configureSecurityPolicy({
+      onViolation: (violation) => violations.push(violation),
+    });
+    const router = createRouter(
+      [
+        {
+          path: "/account",
+          component: () => {
+            throw new Error("session token=secret-token");
+          },
+        },
+      ],
+      {
+        mode: "hash",
+        onError: (error) => seen.push(error.message),
+      },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", router.outlet());
+
+    router.navigate("/account");
+
+    const textContent = document.querySelector("#app")?.textContent ?? "";
+    expect(textContent).toBe("Something went wrong.");
+    expect(textContent).not.toContain("secret-token");
+    expect(document.querySelector("[role='alert']")).toBeInstanceOf(HTMLElement);
+    expect(seen).toEqual(["session token=secret-token"]);
+    expect(violations).toEqual([
+      {
+        type: "exception",
+        message: "Route exception captured.",
+        value: "Error",
+      },
+    ]);
+
+    unmount();
+    stop();
+  });
+
+  test("route errors can use an explicit error view", () => {
+    const router = createRouter(
+      [
+        {
+          path: "/account",
+          component: () => {
+            throw Object.assign(new Error("forbidden"), { status: 403 });
+          },
+        },
+      ],
+      {
+        mode: "hash",
+        error: (error) => `Handled:${error.name}`,
+      },
+    );
+
+    const stop = router.start();
+    const unmount = mount("#app", router.outlet());
+
+    router.navigate("/account");
+
+    expect(document.querySelector("#app")?.textContent).toBe("Handled:Error");
 
     unmount();
     stop();

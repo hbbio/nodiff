@@ -117,8 +117,12 @@ export class SecurityPolicy {
   }
 
   report(violation: SecurityViolation): SecurityViolationError {
-    this.onViolation?.(violation);
+    this.notify(violation);
     return new SecurityViolationError(violation);
+  }
+
+  notify(violation: SecurityViolation): void {
+    this.onViolation?.(violation);
   }
 
   toUrl(value: string | URL): URL {

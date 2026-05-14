@@ -3,6 +3,7 @@ export * from "./auth";
 export * from "./cache";
 export * from "./csrf";
 export * from "./dom";
+export * from "./errors";
 export * from "./forms";
 export * from "./lifecycle";
 export * from "./resource";
