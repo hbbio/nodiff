@@ -1,6 +1,29 @@
-import { createApi, createAuth, createLocalCache, createResource } from "@nodiffjs/core";
+import {
+  configureSecurityPolicy,
+  createApi,
+  createAuth,
+  createLocalCache,
+  createResource,
+  type SecurityViolation,
+} from "@nodiffjs/core";
 import { createStore } from "zustand/vanilla";
 import { z } from "zod";
+
+function reportSecurityViolation(violation: SecurityViolation): void {
+  console.warn(`[nodiff security] ${violation.type}: ${violation.context ?? violation.message}`);
+}
+
+export const securityPolicy = configureSecurityPolicy({
+  mode: "strict",
+  allowedOrigins: ["self", "https://jsonplaceholder.typicode.com"],
+  allowedUrlSchemes: ["https:"],
+  enforceHttps: true,
+  cache: {
+    requireSchema: true,
+    maxTtl: 5 * 60 * 1000,
+  },
+  onViolation: reportSecurityViolation,
+});
 
 export const appCache = createLocalCache("demo:");
 export const apiCache = createLocalCache("demo:http:");
@@ -91,6 +114,7 @@ export const auth = createAuth<{ email: string; name: string }>();
 export const api = createApi({
   baseUrl: "https://jsonplaceholder.typicode.com",
   cache: apiCache,
+  security: securityPolicy,
   getAuthHeaders: auth.authHeaders,
   onUnauthorized: () => auth.logout(),
 });

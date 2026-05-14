@@ -33,7 +33,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "test": "bun test",
-    "check": "bun run typecheck && bun run lint && bun run format:check && bun run test"
+    "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
+    "security:check": "bun audit && bun run check && bun run build"
   },
   "devDependencies": {
     "happy-dom": "catalog:",

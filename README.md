@@ -122,6 +122,7 @@ You can read the code for those pieces in a few files.
 | Resource state | loading, stale, success, error, abort, refresh, mutate                           |
 | Router         | hash or history mode, route params, query params, active links                   |
 | Forms          | zod-backed submit action, native validity messages                               |
+| Security       | DOM sink hardening, strict request policy, CSRF helpers, safe error fallbacks    |
 | Tooling        | Bun workspaces, Vite 8, TypeScript 7 native preview, oxlint, oxfmt               |
 
 ## Run it
@@ -142,6 +143,7 @@ bun run typecheck
 bun run lint
 bun run format
 bun run check
+bun run security:check
 bun run build
 ```
 
@@ -158,7 +160,55 @@ The repo is intentionally modern:
 - oxfmt for formatting
 - ES2022 browser target
 
-`bun run check` runs strict typechecking, type-aware linting, and format checking.
+`bun run check` runs strict typechecking, type-aware linting, format checking, and tests.
+`bun run security:check` adds the dependency audit and production build on top.
+
+## Security defaults
+
+NoDiff tries to make the safe path the short path for rich-client apps:
+
+- DOM text is escaped by construction. The `innerHTML` prop is rejected, raw HTML must be wrapped
+  with `trustedHTML(...)` or passed through `sanitizeHTML(...)`, dangerous tags are blocked, URL
+  attributes are scheme/origin checked, CSS execution sinks are rejected, event props must be
+  functions, and `_blank` links get `noopener noreferrer`.
+- `configureSecurityPolicy(...)` installs a process-wide policy for strict origin checks, allowed
+  URL schemes, HTTPS enforcement, cache TTL/schema rules, CSRF mode, and security event reporting.
+- `createApi(...)` resolves requests against a configured `baseUrl`, strips managed auth headers
+  from other origins, supports required auth, zod response schemas, cache partitioning by auth,
+  strict cached-response schemas, bounded cache TTLs, request timeouts, external-origin opt in, and
+  CSRF headers.
+- `createAuth(...)` keeps tokens in memory by default. localStorage persistence is explicit, and
+  refresh-token persistence requires a second explicit opt in.
+- `ErrorBoundary` and router `error`/`onError` hooks render redacted failures by default, so route
+  exceptions do not become stack traces or secret-bearing messages in the UI.
+- `contentSecurityPolicy(...)` and `securityHeaders(...)` produce strict server headers that match
+  the same policy model.
+
+The demo app opts into strict mode with one policy:
+
+```ts
+export const securityPolicy = configureSecurityPolicy({
+  mode: "strict",
+  allowedOrigins: ["self", "https://jsonplaceholder.typicode.com"],
+  allowedUrlSchemes: ["https:"],
+  enforceHttps: true,
+  cache: { requireSchema: true, maxTtl: 5 * 60 * 1000 },
+});
+
+export const api = createApi({
+  baseUrl: "https://jsonplaceholder.typicode.com",
+  security: securityPolicy,
+});
+```
+
+For server-rendered shells or deployments that can set headers, start from:
+
+```ts
+const headers = securityHeaders({
+  policy: securityPolicy,
+  hsts: true,
+});
+```
 
 ## The demo app
 
@@ -451,7 +501,9 @@ await api.get("/me", {
 });
 ```
 
-The auth helper is intentionally narrow. It handles bearer token state and headers. Your app still owns login, refresh policy, CSRF posture, secure cookie decisions, and server protocol.
+The auth helper is intentionally narrow. It handles bearer token state and headers. Your app still
+owns login, refresh policy, secure cookie decisions, and server protocol. CSRF helpers are available
+for cookie-backed requests.
 
 If an app deliberately accepts the localStorage tradeoff, persistence is explicit:
 
@@ -548,11 +600,14 @@ jsx(type, props);
 jsxs(type, props);
 jsxDEV(type, props);
 Fragment(props);
+ErrorBoundary(props);
 mount(host, componentOrNode, props?);
 append(parent, child);
 fragment(children?);
 on(type, handler, options?);
 setText(value);
+trustedHTML(html);
+sanitizeHTML(html);
 ```
 
 Common props:
@@ -563,15 +618,15 @@ Common props:
   style={{ display: "grid", gap: "1rem" }}
   dataset={{ id: 123 }}
   aria={{ busy: false }}
-  unsafeHTML={"<strong>trusted markup only</strong>"}
+  unsafeHTML={sanitizeHTML("<strong>trusted markup only</strong>")}
   ref={(node) => console.log(node)}
   use={(node) => () => console.log("cleanup", node)}
   onClick={(event) => console.log(event.currentTarget)}
 />
 ```
 
-Raw HTML must use `unsafeHTML`. The ordinary `innerHTML` prop is rejected so HTML injection is
-visible at the call site.
+Raw HTML must use `unsafeHTML` with `trustedHTML(...)` or `sanitizeHTML(...)`. The ordinary
+`innerHTML` prop is rejected so HTML injection is visible at the call site.
 
 Events are inferred from `onX` prop names. `onClick` maps to `click`, `onInput` maps to `input`, and so on.
 
@@ -641,7 +696,10 @@ const api = createApi({
   baseUrl: "/api",
   headers: { "X-App": "demo" },
   cache,
+  security: securityPolicy,
   getAuthHeaders: auth.authHeaders,
+  csrf: { getToken: readCsrfToken, required: "state-changing" },
+  timeout: 10_000,
   refreshAuth: refreshToken,
   onUnauthorized: () => auth.logout(),
 });
@@ -677,6 +735,9 @@ type ApiRequestOptions<T> = {
         swr?: boolean;
       };
   auth?: false | "optional" | "required";
+  csrf?: boolean | CsrfRequestOptions;
+  external?: boolean;
+  timeout?: number;
   credentials?: RequestCredentials;
 };
 ```
@@ -732,6 +793,8 @@ users.reset();
 const router = createRouter(routes, {
   mode: "history",
   fallback: () => <NotFound />,
+  error: () => <p role="alert">Something went wrong.</p>,
+  onError: (error) => reportError(error),
 });
 
 router.href("/posts");
@@ -928,7 +991,9 @@ packages/nodiff/src/
   api.ts              fetch client with zod, auth, cache
   auth.ts             bearer token store with optional persistence
   cache.ts            localStorage cache with TTL and tags
+  csrf.ts             CSRF token readers and double-submit helpers
   dom.ts              direct DOM TSX runtime
+  errors.ts           redacted error messages for UI fallbacks
   forms.ts            zod form action and validity helpers
   index.ts            public exports
   jsx-dev-runtime.ts  Vite/dev automatic JSX runtime entry
@@ -936,6 +1001,7 @@ packages/nodiff/src/
   lifecycle.ts        cleanup registry
   resource.ts         async resource store
   router.ts           hash/history router
+  security.ts         policy, CSP, and security header helpers
   store.ts            zustand-compatible bindings
 ```
 

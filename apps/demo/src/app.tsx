@@ -15,6 +15,17 @@ function NotFound() {
   );
 }
 
+function RouteError() {
+  return (
+    <section class="alert alert-error" role="alert">
+      <div>
+        <h1 class="font-bold">Route failed</h1>
+        <p>The page could not render safely.</p>
+      </div>
+    </section>
+  );
+}
+
 export const router = createRouter(
   [
     { path: "/", title: "NoDiff", component: HomePage },
@@ -25,6 +36,7 @@ export const router = createRouter(
   {
     mode: "hash",
     fallback: NotFound,
+    error: RouteError,
   },
 );
 
