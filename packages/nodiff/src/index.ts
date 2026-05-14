@@ -6,4 +6,5 @@ export * from "./forms";
 export * from "./lifecycle";
 export * from "./resource";
 export * from "./router";
+export * from "./security";
 export * from "./store";
