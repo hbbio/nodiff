@@ -88,4 +88,15 @@ describe("DOM runtime", () => {
 
     unmount();
   });
+
+  test("requires explicit unsafeHTML for raw HTML injection", () => {
+    const node = jsx("div", {
+      unsafeHTML: "<strong>Trusted</strong>",
+      children: "Ignored",
+    });
+
+    expect(node).toBeInstanceOf(HTMLElement);
+    expect((node as HTMLElement).innerHTML).toBe("<strong>Trusted</strong>");
+    expect(() => jsx("div", { innerHTML: "<strong>nope</strong>" })).toThrow("Use unsafeHTML");
+  });
 });

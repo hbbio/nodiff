@@ -29,7 +29,7 @@ export type ElementProps<T extends Element = Element> = {
   key?: unknown;
   dataset?: Record<string, string | number | boolean | null | undefined>;
   aria?: Record<string, string | number | boolean | null | undefined>;
-  innerHTML?: string;
+  unsafeHTML?: string;
   textContent?: string | number | null | undefined;
   onClick?: (event: MouseEvent & { currentTarget: T }) => void;
   onInput?: (event: InputEvent & { currentTarget: T }) => void;
@@ -260,6 +260,10 @@ function applyProp(element: Element, name: string, value: unknown): void {
   }
 
   if (name === "innerHTML") {
+    throw new Error("The innerHTML prop is not supported. Use unsafeHTML for explicit raw HTML.");
+  }
+
+  if (name === "unsafeHTML") {
     element.innerHTML = domString(value);
     return;
   }
@@ -347,7 +351,7 @@ export function jsx(type: string | Component<unknown>, props: ElementProps | nul
 
   if (
     currentProps.children !== undefined &&
-    currentProps.innerHTML === undefined &&
+    currentProps.unsafeHTML === undefined &&
     currentProps.textContent === undefined
   ) {
     append(element, currentProps.children);

@@ -556,11 +556,15 @@ Common props:
   style={{ display: "grid", gap: "1rem" }}
   dataset={{ id: 123 }}
   aria={{ busy: false }}
+  unsafeHTML={"<strong>trusted markup only</strong>"}
   ref={(node) => console.log(node)}
   use={(node) => () => console.log("cleanup", node)}
   onClick={(event) => console.log(event.currentTarget)}
 />
 ```
+
+Raw HTML must use `unsafeHTML`. The ordinary `innerHTML` prop is rejected so HTML injection is
+visible at the call site.
 
 Events are inferred from `onX` prop names. `onClick` maps to `click`, `onInput` maps to `input`, and so on.
 
