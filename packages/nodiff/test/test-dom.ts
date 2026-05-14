@@ -19,10 +19,26 @@ const domGlobals = [
   "URLSearchParams",
   "FormData",
   "Blob",
+  "Event",
+  "MouseEvent",
+  "InputEvent",
+  "SubmitEvent",
+  "KeyboardEvent",
+  "FocusEvent",
 ] as const;
 
 export function installDom(): () => void {
   const window = new Window();
+  Object.assign(window, {
+    Error,
+    EvalError,
+    RangeError,
+    ReferenceError,
+    SyntaxError,
+    TypeError,
+    URIError,
+  });
+
   const previous = new Map<string, unknown>();
 
   for (const key of domGlobals) {
