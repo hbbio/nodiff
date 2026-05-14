@@ -89,7 +89,7 @@ async function readPayload(response: Response): Promise<unknown> {
 }
 
 export function createApi(options: ApiClientOptions = {}) {
-  const cache = options.cache ?? createLocalCache("ria:http:");
+  const cache = options.cache ?? createLocalCache("nodiff:http:");
 
   async function runFetch<T>(
     url: string,

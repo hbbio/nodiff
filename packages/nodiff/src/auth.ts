@@ -35,7 +35,7 @@ export type AuthOptions<TToken extends AuthToken> = {
 export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken>(
   options: AuthOptions<TToken> = {},
 ) {
-  const storageKey = options.storageKey ?? "ria:auth";
+  const storageKey = options.storageKey ?? "nodiff:auth";
   const schema = options.tokenSchema ?? (AuthTokenSchema as z.ZodType<TToken>);
   const cache = createLocalCache("");
   const savedToken = cache.get<TToken>(storageKey, schema, { allowStale: true })?.value ?? null;

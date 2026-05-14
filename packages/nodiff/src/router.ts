@@ -88,7 +88,7 @@ function normalizePath(path: string): string {
 }
 
 function parsePath(path: string): { pathname: string; query: URLSearchParams } {
-  const url = new URL(normalizePath(path), "http://mini-ria.local");
+  const url = new URL(normalizePath(path), "http://nodiff.local");
   return { pathname: url.pathname || "/", query: url.searchParams };
 }
 

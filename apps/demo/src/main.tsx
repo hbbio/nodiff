@@ -9,7 +9,7 @@ import {
   text,
   view,
   zodSubmit,
-} from "@mini-ria/core";
+} from "@nodiffjs/core";
 import { createStore } from "zustand/vanilla";
 import { z } from "zod";
 import "./styles.css";
@@ -171,7 +171,7 @@ function HomePage() {
         <p class="eyebrow">No React, no axios, no virtual DOM</p>
         <h1>Direct DOM TSX for rich-client apps.</h1>
         <p>
-          TSX compiles through Vite into calls to <code>@mini-ria/core/jsx-runtime</code>.
+          TSX compiles through Vite into calls to <code>@nodiffjs/core/jsx-runtime</code>.
           Components create real DOM nodes, actions attach behavior, and zustand stores drive
           explicit updates.
         </p>
@@ -470,10 +470,10 @@ function NotFound() {
 
 const router = createRouter(
   [
-    { path: "/", title: "mini-ria", component: HomePage },
-    { path: "/posts", title: "Posts | mini-ria", component: PostsPage },
-    { path: "/auth", title: "Auth | mini-ria", component: AuthPage },
-    { path: "/cache", title: "Cache | mini-ria", component: CachePage },
+    { path: "/", title: "NoDiff", component: HomePage },
+    { path: "/posts", title: "Posts | NoDiff", component: PostsPage },
+    { path: "/auth", title: "Auth | NoDiff", component: AuthPage },
+    { path: "/cache", title: "Cache | NoDiff", component: CachePage },
   ],
   {
     mode: "hash",
@@ -496,7 +496,7 @@ function App() {
           }}
         >
           <span class="brand-mark">m</span>
-          <span>mini-ria</span>
+          <span>NoDiff</span>
         </a>
         <nav>
           <Link to="/" exact activeClass="active">

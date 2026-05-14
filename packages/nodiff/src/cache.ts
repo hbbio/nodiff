@@ -28,7 +28,7 @@ function canUseLocalStorage(): boolean {
 }
 
 export class LocalCache {
-  constructor(public readonly prefix = "ria:") {}
+  constructor(public readonly prefix = "nodiff:") {}
 
   fullKey(key: string): string {
     return `${this.prefix}${key}`;
@@ -117,6 +117,6 @@ export class LocalCache {
   }
 }
 
-export function createLocalCache(prefix = "ria:"): LocalCache {
+export function createLocalCache(prefix = "nodiff:"): LocalCache {
   return new LocalCache(prefix);
 }
