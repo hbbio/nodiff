@@ -1,5 +1,6 @@
 import { addCleanup, clearBetween, removeNode } from "./lifecycle";
 import { type Action, type Child, toNodes } from "./dom";
+import type { ResourceState } from "./resource";
 
 export type Equality<T> = (a: T, b: T) => boolean;
 
@@ -158,6 +159,59 @@ export function Show<TState, TValue>(props: ShowProps<TState, TValue>): Document
         : renderShowFallback(props.fallback, state, value),
     props.equality ? { equality: props.equality } : {},
   );
+}
+
+export type ResourceStore<T> = ReadableStore<ResourceState<T>>;
+export type ResourceLike<T> = ResourceStore<T> | { store: ResourceStore<T> };
+
+export type ResourceViewProps<T> = {
+  resource: ResourceLike<T>;
+  children: (data: T, state: ResourceState<T>) => Child;
+  pending?: Child | ((state: ResourceState<T>) => Child);
+  error?: Child | ((error: Error, state: ResourceState<T>) => Child);
+  empty?: Child | ((state: ResourceState<T>) => Child);
+  equality?: Equality<ResourceState<T>>;
+};
+
+function resourceStore<T>(resource: ResourceLike<T>): ResourceStore<T> {
+  return "store" in resource ? resource.store : resource;
+}
+
+function renderResourceSlot<T>(
+  slot: Child | ((state: ResourceState<T>) => Child) | undefined,
+  state: ResourceState<T>,
+): Child {
+  if (slot === undefined) return null;
+  return typeof slot === "function" ? slot(state) : slot;
+}
+
+function renderResourceError<T>(
+  slot: Child | ((error: Error, state: ResourceState<T>) => Child) | undefined,
+  error: Error,
+  state: ResourceState<T>,
+): Child {
+  if (slot === undefined) return null;
+  return typeof slot === "function" ? slot(error, state) : slot;
+}
+
+export function ResourceView<T>(props: ResourceViewProps<T>): DocumentFragment {
+  const store = resourceStore(props.resource);
+  return view(
+    store,
+    (state) => state,
+    (state) => {
+      if (state.data !== null) return props.children(state.data, state);
+      if (state.error) return renderResourceError(props.error, state.error, state);
+      if (state.loading || state.status === "loading")
+        return renderResourceSlot(props.pending, state);
+      return renderResourceSlot(props.empty ?? props.pending, state);
+    },
+    props.equality ? { equality: props.equality } : {},
+  );
+}
+
+export function Await<T>(props: ResourceViewProps<T>): DocumentFragment {
+  return ResourceView(props);
 }
 
 export function list<TState, TItem>(

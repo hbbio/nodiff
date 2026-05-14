@@ -109,20 +109,20 @@ You can read the code for those pieces in a few files.
 
 ## What you get
 
-| Area           | Included                                                                       |
-| -------------- | ------------------------------------------------------------------------------ |
-| TSX runtime    | `jsx`, `jsxs`, `jsxDEV`, `Fragment`, intrinsic element typing                  |
-| DOM            | `mount`, `append`, direct node creation, events, refs, actions                 |
-| Lifecycle      | cleanup on unmount and region redraw                                           |
-| State bindings | `text`, `view`, `when`, `Show`, `list`, `For`, `effect`, `bind.*`              |
-| Stores         | works with `zustand/vanilla` and any compatible store shape                    |
-| API client     | `fetch`, query params, JSON body handling, zod parsing, auth headers, 401 hook |
-| Cache          | localStorage envelopes with TTL, tags, stale reads, schema validation          |
-| Auth           | persisted bearer token controller over zustand vanilla                         |
-| Resource state | loading, stale, success, error, abort, refresh, mutate                         |
-| Router         | hash or history mode, route params, query params, active links                 |
-| Forms          | zod-backed submit action, native validity messages                             |
-| Tooling        | Bun workspaces, Vite 8, TypeScript 7 native preview, oxlint, oxfmt             |
+| Area           | Included                                                                         |
+| -------------- | -------------------------------------------------------------------------------- |
+| TSX runtime    | `jsx`, `jsxs`, `jsxDEV`, `Fragment`, intrinsic element typing                    |
+| DOM            | `mount`, `append`, direct node creation, events, refs, actions                   |
+| Lifecycle      | cleanup on unmount and region redraw                                             |
+| State bindings | `text`, `view`, `when`, `Show`, `list`, `For`, `ResourceView`, `Await`, `bind.*` |
+| Stores         | works with `zustand/vanilla` and any compatible store shape                      |
+| API client     | `fetch`, query params, JSON body handling, zod parsing, auth headers, 401 hook   |
+| Cache          | localStorage envelopes with TTL, tags, stale reads, schema validation            |
+| Auth           | persisted bearer token controller over zustand vanilla                           |
+| Resource state | loading, stale, success, error, abort, refresh, mutate                           |
+| Router         | hash or history mode, route params, query params, active links                   |
+| Forms          | zod-backed submit action, native validity messages                               |
+| Tooling        | Bun workspaces, Vite 8, TypeScript 7 native preview, oxlint, oxfmt               |
 
 ## Run it
 
@@ -577,6 +577,8 @@ when(store, predicate, yes, no?);
 Show({ store, when, children, fallback?, equality? });
 list(store, selector, render, options?);
 For({ store, each, by, children, fallback?, equality? });
+ResourceView({ resource, children, pending?, error?, empty?, equality? });
+Await({ resource, children, pending?, error?, empty?, equality? });
 effect(store, selector, run, equality?);
 subscribeSelector(store, selector, listener, equality?);
 ```
