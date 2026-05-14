@@ -34,11 +34,33 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
 
   let lastArgs: TArgs | undefined;
   let controller: AbortController | null = null;
+  let requestId = 0;
+
+  function isAbortError(error: unknown): boolean {
+    return (
+      (typeof DOMException !== "undefined" &&
+        error instanceof DOMException &&
+        error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError")
+    );
+  }
+
+  function finishAbort(requestController: AbortController): void {
+    if (controller === requestController) controller = null;
+    const current = store.getState();
+    store.setState({
+      status: current.data === null ? "idle" : "success",
+      loading: false,
+      stale: false,
+    });
+  }
 
   async function load(args?: TArgs): Promise<T | undefined> {
     lastArgs = args as TArgs;
+    const currentRequestId = ++requestId;
     controller?.abort();
-    controller = new AbortController();
+    const requestController = new AbortController();
+    controller = requestController;
 
     const current = store.getState();
     store.setState({
@@ -49,7 +71,9 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     });
 
     try {
-      const data = await options.load(lastArgs as TArgs, { signal: controller.signal });
+      const data = await options.load(lastArgs as TArgs, { signal: requestController.signal });
+      if (currentRequestId !== requestId || requestController.signal.aborted) return undefined;
+      if (controller === requestController) controller = null;
       store.setState({
         status: "success",
         data,
@@ -60,7 +84,12 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
       });
       return data;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return undefined;
+      if (currentRequestId !== requestId) return undefined;
+      if (requestController.signal.aborted || isAbortError(error)) {
+        finishAbort(requestController);
+        return undefined;
+      }
+      if (controller === requestController) controller = null;
       store.setState({
         status: "error",
         error: error instanceof Error ? error : new Error(String(error)),
@@ -87,7 +116,9 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
   }
 
   function reset(): void {
+    requestId += 1;
     controller?.abort();
+    controller = null;
     store.setState({
       status: initialData === null ? "idle" : "success",
       data: initialData,
@@ -106,7 +137,14 @@ export function createResource<T, TArgs = void>(options: ResourceOptions<T, TArg
     refresh,
     mutate,
     reset,
-    abort: () => controller?.abort(),
+    abort: () => {
+      if (!controller) return;
+      requestId += 1;
+      const requestController = controller;
+      controller = null;
+      requestController.abort();
+      finishAbort(requestController);
+    },
   };
 }
 
