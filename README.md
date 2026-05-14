@@ -22,7 +22,7 @@ function App() {
 mount("#app", App);
 ```
 
-TSX compiles through Vite into calls to `@nodiffjs/core/jsx-runtime`. Those calls create real DOM nodes. Stores decide when small regions update. Data enters the app through zod schemas. Cache entries carry expiry. Auth is just a bearer header helper over a persisted token.
+TSX compiles through Vite into calls to `@nodiffjs/core/jsx-runtime`. Those calls create real DOM nodes. Stores decide when small regions update. Data enters the app through zod schemas. Cache entries carry expiry. Auth is just a bearer header helper over an app-owned token.
 
 This repo contains both the framework package and a demo app.
 
@@ -118,7 +118,7 @@ You can read the code for those pieces in a few files.
 | Stores         | works with `zustand/vanilla` and any compatible store shape                      |
 | API client     | `fetch`, query params, JSON body handling, zod parsing, auth headers, 401 hook   |
 | Cache          | localStorage envelopes with TTL, tags, stale reads, schema validation            |
-| Auth           | persisted bearer token controller over zustand vanilla                           |
+| Auth           | bearer token controller over zustand vanilla with optional persistence           |
 | Resource state | loading, stale, success, error, abort, refresh, mutate                           |
 | Router         | hash or history mode, route params, query params, active links                   |
 | Forms          | zod-backed submit action, native validity messages                               |
@@ -168,7 +168,7 @@ The demo is intentionally plain. It shows the framework surface without hiding i
 | -------- | ---------------------------------------------------------------------------- |
 | `/`      | direct DOM TSX, persisted zustand state, live text binding, theme preference |
 | `/posts` | zod-validated API data, cached GET request, resource state, search binding   |
-| `/auth`  | fake token login, persisted bearer token, auth headers, zod form submit      |
+| `/auth`  | fake token login, bearer token headers, zod form submit                      |
 | `/cache` | cache key inspection, localStorage clearing, auth reset                      |
 
 The API data comes from JSONPlaceholder. The app parses every post through zod before it enters UI state.
@@ -418,12 +418,10 @@ Render it with `view`:
 
 ### 9. Add token auth
 
-`createAuth` stores a token in localStorage and exposes helpers for the API client.
+`createAuth` keeps a token in memory by default and exposes helpers for the API client.
 
 ```ts
-const auth = createAuth<{ email: string; name: string }>({
-  storageKey: "demo:auth",
-});
+const auth = createAuth<{ email: string; name: string }>();
 
 const api = createApi({
   baseUrl: "/api",
@@ -453,7 +451,16 @@ await api.get("/me", {
 });
 ```
 
-The auth helper is intentionally narrow. It handles bearer token storage and headers. Your app still owns login, refresh policy, CSRF posture, secure cookie decisions, and server protocol.
+The auth helper is intentionally narrow. It handles bearer token state and headers. Your app still owns login, refresh policy, CSRF posture, secure cookie decisions, and server protocol.
+
+If an app deliberately accepts the localStorage tradeoff, persistence is explicit:
+
+```ts
+const auth = createAuth<User>({
+  persist: true,
+  storageKey: "auth",
+});
+```
 
 ### 10. Add a router
 
@@ -679,7 +686,7 @@ The client serializes plain bodies as JSON, leaves `FormData`, `URLSearchParams`
 ### Auth
 
 ```ts
-const auth = createAuth<User>({ storageKey: "auth" });
+const auth = createAuth<User>();
 
 auth.setToken(token, user);
 auth.setUser(user);
@@ -919,7 +926,7 @@ To understand the framework, read these files in order:
 ```txt
 packages/nodiff/src/
   api.ts              fetch client with zod, auth, cache
-  auth.ts             persisted bearer token store
+  auth.ts             bearer token store with optional persistence
   cache.ts            localStorage cache with TTL and tags
   dom.ts              direct DOM TSX runtime
   forms.ts            zod form action and validity helpers

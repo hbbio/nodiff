@@ -30,7 +30,7 @@ export function HomePage() {
             label="Auth"
             value={text(auth.store, (state) => state.status)}
             badge={text(auth.store, (state) => (state.token ? "token" : "guest"))}
-            hint="Persisted bearer-token helper"
+            hint="Bearer-token helper"
             use={bind.classes(auth.store, (state) => ({
               "text-success": state.status === "authenticated",
             }))}

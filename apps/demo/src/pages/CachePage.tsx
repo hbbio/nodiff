@@ -26,8 +26,8 @@ export function CachePage() {
   return (
     <section class="grid gap-5">
       <PageHeader title="Inspectable cache state." actions={<CacheActions />}>
-        Preferences, auth, and HTTP snapshots share the same tiny cache format with expiry, tags,
-        stale reads, and zod validation at read time.
+        Preferences and HTTP snapshots share the same tiny cache format with expiry, tags, stale
+        reads, and zod validation at read time.
       </PageHeader>
 
       {view(
@@ -44,7 +44,7 @@ export function CachePage() {
                   <Badge>{appKeys.length}</Badge>
                 </div>
                 <div class="stat-value text-3xl">{appKeys.length}</div>
-                <div class="stat-desc">Preferences and auth snapshots.</div>
+                <div class="stat-desc">Preferences snapshots.</div>
               </div>
               <div class="stat">
                 <div class="flex items-start justify-between gap-3">

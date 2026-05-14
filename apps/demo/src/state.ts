@@ -86,7 +86,7 @@ function applyTheme(theme: PreferencesData["theme"]): void {
 
 applyTheme(preferences.getState().theme);
 
-export const auth = createAuth<{ email: string; name: string }>({ storageKey: "demo:auth" });
+export const auth = createAuth<{ email: string; name: string }>();
 
 export const api = createApi({
   baseUrl: "https://jsonplaceholder.typicode.com",

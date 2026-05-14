@@ -18,7 +18,7 @@ function AuthOverview() {
         <div class="stat-value text-3xl">
           {text(auth.store, (state) => state.user?.name ?? "guest")}
         </div>
-        <div class="stat-desc">Stored token state is ordinary zustand data.</div>
+        <div class="stat-desc">Token state is ordinary zustand data.</div>
       </div>
       <div class="stat">
         <div class="flex items-start justify-between gap-3">
@@ -93,8 +93,8 @@ export function AuthPage() {
   return (
     <section class="grid gap-5">
       <PageHeader title="Bearer headers without ceremony.">
-        A tiny controller persists a token, exposes auth headers for the API client, and lets the
-        app keep ownership of login and refresh policy.
+        A tiny controller keeps a token in memory, exposes auth headers for the API client, and lets
+        the app keep ownership of login and refresh policy.
       </PageHeader>
 
       <AuthOverview />

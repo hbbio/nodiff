@@ -30,6 +30,7 @@ export type AuthState<TUser = unknown, TToken extends AuthToken = AuthToken> = {
 export type AuthOptions<TToken extends AuthToken> = {
   storageKey?: string;
   tokenSchema?: z.ZodType<TToken>;
+  persist?: boolean;
 };
 
 export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken>(
@@ -38,13 +39,34 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
   const storageKey = options.storageKey ?? "nodiff:auth";
   const schema = options.tokenSchema ?? (AuthTokenSchema as z.ZodType<TToken>);
   const cache = createLocalCache("");
-  const savedToken = cache.get<TToken>(storageKey, schema, { allowStale: true })?.value ?? null;
+  const persist = options.persist ?? false;
+
+  function tokenExpired(token: TToken, skewMs = 0): boolean {
+    if (!token.expiresAt) return false;
+    return token.expiresAt - skewMs <= Date.now();
+  }
+
+  function readSavedToken(): TToken | null {
+    const savedToken = cache.get<TToken>(storageKey, schema)?.value ?? null;
+    if (!savedToken) return null;
+    if (tokenExpired(savedToken)) {
+      cache.remove(storageKey);
+      return null;
+    }
+    return savedToken;
+  }
+
+  const savedToken = persist ? readSavedToken() : null;
 
   const store = createStore<AuthState<TUser, TToken>>((set) => ({
     token: savedToken,
     user: null,
     status: savedToken ? "authenticated" : "anonymous",
     setToken: (token, user) => {
+      if (tokenExpired(token)) {
+        set({ token: null, user: null, status: "anonymous" });
+        return;
+      }
       set((state) => ({
         token,
         user: user === undefined ? state.user : user,
@@ -55,28 +77,44 @@ export function createAuth<TUser = unknown, TToken extends AuthToken = AuthToken
     clear: () => set({ token: null, user: null, status: "anonymous" }),
   }));
 
-  store.subscribe((state, previous) => {
-    if (state.token === previous.token) return;
-    if (state.token) cache.set(storageKey, state.token);
-    else cache.remove(storageKey);
-  });
+  if (persist) {
+    store.subscribe((state, previous) => {
+      if (state.token === previous.token) return;
+      if (!state.token || tokenExpired(state.token)) {
+        cache.remove(storageKey);
+        return;
+      }
+      const ttl = state.token.expiresAt ? state.token.expiresAt - Date.now() : undefined;
+      if (ttl !== undefined && ttl <= 0) {
+        cache.remove(storageKey);
+        return;
+      }
+      cache.set(storageKey, state.token, ttl === undefined ? {} : { ttl });
+    });
+  }
+
+  function activeToken(): TToken | null {
+    const token = store.getState().token;
+    if (!token?.accessToken || tokenExpired(token)) return null;
+    return token;
+  }
 
   function getToken(): string | null {
-    return store.getState().token?.accessToken ?? null;
+    return activeToken()?.accessToken ?? null;
   }
 
   function authHeaders(): HeadersInit {
-    const token = store.getState().token;
-    if (!token?.accessToken) return {};
+    const token = activeToken();
+    if (!token) return {};
     return {
       Authorization: `${token.tokenType ?? "Bearer"} ${token.accessToken}`,
     };
   }
 
   function isExpired(skewMs = 30_000): boolean {
-    const expiresAt = store.getState().token?.expiresAt;
-    if (!expiresAt) return false;
-    return expiresAt - skewMs <= Date.now();
+    const token = store.getState().token;
+    if (!token) return false;
+    return tokenExpired(token, skewMs);
   }
 
   function isAuthenticated(): boolean {
