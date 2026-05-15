@@ -1128,9 +1128,3 @@ The package source keeps extensionless local imports for the monorepo developmen
 build rewrites only the emitted `dist` specifiers so standard ESM consumers can import the packed
 artifact directly. Package metadata avoids workspace-only dependency protocols, so `npm pack` output
 can be installed outside this workspace.
-
-## The one-file promise
-
-Open `apps/demo/src/main.tsx` and you can see the whole client app: preferences, auth, cache, API client, resource state, routes, pages, and mount call.
-
-That is the point of the project. A rich-client app should be possible to understand without following a renderer through a black box.
