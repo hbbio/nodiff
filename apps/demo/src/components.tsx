@@ -164,7 +164,9 @@ export function ThemeCard() {
                   class="theme-controller btn btn-ghost btn-sm btn-block justify-start"
                   aria-label={themeLabel(theme)}
                   value={theme === "system" ? "default" : theme}
-                  use={bind.prop("checked", preferences, (state) => state.theme === theme)}
+                  use={bind.props(preferences, (state) => ({
+                    checked: state.theme === theme,
+                  }))}
                   onChange={() => preferences.getState().setTheme(theme)}
                 />
               </li>

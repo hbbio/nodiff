@@ -1,10 +1,12 @@
 import { addCleanup, clearBetween, removeNode } from "./lifecycle";
 import {
   assertSafeCssValue,
+  clearDomProperty,
+  setDomAttribute,
+  setDomProperty,
   type Action,
   type Child,
   toNodes,
-  validateAttributeValue,
 } from "./dom";
 import type { ResourceState } from "./resource";
 
@@ -445,43 +447,6 @@ export function For<TState, TItem, TKey = unknown>(
   return frag;
 }
 
-function setAttributeValue(element: Element, name: string, value: unknown): void {
-  if (value === null || value === undefined || value === false) {
-    element.removeAttribute(name);
-    return;
-  }
-  if (value === true) {
-    element.setAttribute(name, "");
-    return;
-  }
-  if (typeof value === "string") {
-    validateAttributeValue(element, name, value);
-    element.setAttribute(name, value);
-    return;
-  }
-  if (typeof value === "number" || typeof value === "bigint" || typeof value === "symbol") {
-    const next = String(value);
-    validateAttributeValue(element, name, next);
-    element.setAttribute(name, next);
-    return;
-  }
-  if (value instanceof Date) {
-    const next = value.toISOString();
-    validateAttributeValue(element, name, next);
-    element.setAttribute(name, next);
-    return;
-  }
-  try {
-    const next = JSON.stringify(value) ?? Object.prototype.toString.call(value);
-    validateAttributeValue(element, name, next);
-    element.setAttribute(name, next);
-  } catch {
-    const next = Object.prototype.toString.call(value);
-    validateAttributeValue(element, name, next);
-    element.setAttribute(name, next);
-  }
-}
-
 function cssName(name: string): string {
   return name.includes("-") ? name : name.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 }
@@ -527,39 +492,6 @@ function setAriaValue(
   const attr = name.startsWith("aria-") ? name : `aria-${name}`;
   if (value === null || value === undefined || value === false) element.removeAttribute(attr);
   else element.setAttribute(attr, String(value));
-}
-
-function isSvgElement(element: Element): boolean {
-  return typeof SVGElement !== "undefined" && element instanceof SVGElement;
-}
-
-function clearPropertyValue(element: Element, name: string): void {
-  const target = element as unknown as Record<string, unknown>;
-  if (name in target && !isSvgElement(element)) {
-    const current = target[name];
-    target[name] = typeof current === "boolean" ? false : typeof current === "number" ? 0 : "";
-  }
-  element.removeAttribute(name === "className" ? "class" : name);
-}
-
-function setPropertyValue(element: Element, name: string, value: unknown): void {
-  if (name.toLowerCase().startsWith("on")) {
-    validateAttributeValue(element, name, "");
-  }
-
-  if (value === null || value === undefined || value === false) {
-    clearPropertyValue(element, name);
-    return;
-  }
-
-  const target = element as unknown as Record<string, unknown>;
-  if (name in target && !isSvgElement(element)) {
-    if (typeof value === "string") validateAttributeValue(element, name, value);
-    target[name] = value;
-    return;
-  }
-
-  setAttributeValue(element, name, value);
 }
 
 function applyClassBinding(
@@ -665,7 +597,7 @@ function createPropsBinding(element: Element): (value: PropsBinding) => void {
       setAriaValue(element, name, item),
     );
     previousAttributes = syncNamedValues(previousAttributes, value.attributes, (name, item) =>
-      setAttributeValue(element, name, item),
+      setDomAttribute(element, name, item),
     );
 
     const seenProperties = new Set<string>();
@@ -687,14 +619,14 @@ function createPropsBinding(element: Element): (value: PropsBinding) => void {
         element.textContent =
           text === null || text === undefined || text === false ? "" : String(text);
       } else {
-        setPropertyValue(element, name, item);
+        setDomProperty(element, name, item);
       }
     }
 
     for (const name of previousProperties) {
       if (seenProperties.has(name)) continue;
       if (name === "textContent") element.textContent = "";
-      else clearPropertyValue(element, name);
+      else clearDomProperty(element, name);
     }
     previousProperties = seenProperties;
   };
@@ -724,7 +656,7 @@ export const bind = {
     equality?: Equality<TValue>,
   ): Action<Element> {
     return (element) => {
-      const sync = (value: TValue) => setAttributeValue(element, name, value);
+      const sync = (value: TValue) => setDomAttribute(element, name, value);
       sync(selector(store.getState()));
       return subscribeSelector(store, selector, sync, equality);
     };
@@ -801,21 +733,6 @@ export const bind = {
           if (!next.has(name)) element.style.removeProperty(name);
         }
         previous = next;
-      };
-      sync(selector(store.getState()));
-      return subscribeSelector(store, selector, sync, equality);
-    };
-  },
-
-  prop<TState, TValue, TElement extends Element = Element>(
-    name: string,
-    store: ReadableStore<TState>,
-    selector: Selector<TState, TValue>,
-    equality?: Equality<TValue>,
-  ): Action<TElement> {
-    return (element) => {
-      const sync = (value: TValue) => {
-        setPropertyValue(element, name, value);
       };
       sync(selector(store.getState()));
       return subscribeSelector(store, selector, sync, equality);

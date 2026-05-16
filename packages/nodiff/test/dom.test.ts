@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createStore } from "zustand/vanilla";
 import {
+  DOM_SINK_POLICY,
   ErrorBoundary,
   Fragment,
   catchRender,
@@ -151,6 +152,15 @@ describe("DOM runtime", () => {
       "must be a function",
     );
     expect(() => jsx("script", { children: "alert(1)" })).toThrow("not supported");
+  });
+
+  test("keeps DOM sink policy explicit", () => {
+    expect(DOM_SINK_POLICY.blockedElementTags).toContain("script");
+    expect(DOM_SINK_POLICY.rawHtmlProperties).toContain("innerhtml");
+    expect(DOM_SINK_POLICY.singleUrlAttributes).toContain("href");
+    expect(DOM_SINK_POLICY.urlListAttributes).toContain("srcset");
+    expect(DOM_SINK_POLICY.cssAttributes).toEqual(["style"]);
+    expect(DOM_SINK_POLICY.eventAttributePrefix).toBe("on");
   });
 
   test("blocks CSS execution sinks in static styles", () => {

@@ -708,7 +708,6 @@ bind.attr(name, store, selector, equality?);
 bind.class(name, store, selector, equality?);
 bind.classes(store, selector, equality?);
 bind.style(store, selector, equality?);
-bind.prop(name, store, selector, equality?);
 bind.props(store, selector, equality?);
 bind.dataset(name, store, selector, equality?);
 bind.aria(name, store, selector, equality?);
@@ -735,6 +734,10 @@ Use `bind.props` when several element states should move together:
   }))}
 />
 ```
+
+There is intentionally no generic single-property binding helper. Use `bind.props` for checked DOM
+properties such as `disabled`, `checked`, `value`, and `title`; use an explicit `use` action when
+you need imperative DOM access.
 
 ### Cache
 

@@ -22,6 +22,9 @@ bind.props(vm, (state) => ({
   title: state.label,
 }));
 
+// @ts-expect-error single-property binding is intentionally not part of the safe bind API.
+bind.prop("title", vm, (state) => state.label);
+
 const props = {
   disabled: true,
   dataset: { id: "posts" },
